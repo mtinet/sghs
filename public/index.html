@@ -5,42 +5,109 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>서울여중 사명선언문 타자연습</title>
   <link rel="stylesheet" href="../src/style.css" />
+  <style>
+    body { font-size: 90%; }
+    .lang-type-row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 1.2em;
+    }
+  </style>
 </head>
 <body>
-  <div class="container" style="display: flex; gap: 24px; max-width: 1000px;">
-    <div style="flex:2;">
-      <h1>사명선언문 타자연습</h1>
-      <div id="user-info">
-        <input type="text" id="student-id" maxlength="5" placeholder="학번(5자리 숫자)" />
-        <input type="text" id="student-name" maxlength="10" placeholder="이름(한글)" />
-        <button onclick="startGame()">게임 시작</button>
-        <div id="user-error"></div>
-      </div>
-      <div id="mode-select" style="display:none">
-        <div class="mode-grid">
-          <button class="mode-btn" onclick="setMode('kor-short')">한글 짧은 글</button>
-          <button class="mode-btn" onclick="setMode('kor-long')">한글 긴 글</button>
-          <button class="mode-btn" onclick="setMode('eng-short')">영문 짧은 글</button>
-          <button class="mode-btn" onclick="setMode('eng-long')">영문 긴 글</button>
+  <div id="login-area" style="max-width:400px;margin:40px auto 32px auto;padding:32px 24px 24px 24px;background:#f8fafd;border-radius:18px;box-shadow:0 2px 8px #0001;">
+    <h2 style="text-align:center;color:#3f3fc9;margin-bottom:1.2em;">로그인</h2>
+    <div style="margin-bottom:1em;">
+      <label for="login-id" style="font-weight:600;">학번 (5자리 숫자)</label>
+      <input id="login-id" type="text" maxlength="5" pattern="[0-9]{5}" style="width:100%;font-size:1.1em;padding:10px;margin-top:6px;border-radius:8px;border:1.5px solid #b0bec5;" placeholder="예: 12345" />
+    </div>
+    <div style="margin-bottom:1.5em;">
+      <label for="login-name" style="font-weight:600;">이름 (한글 2자 이상)</label>
+      <input id="login-name" type="text" maxlength="5" style="width:100%;font-size:1.1em;padding:10px;margin-top:6px;border-radius:8px;border:1.5px solid #b0bec5;" placeholder="예: 홍길동" />
+    </div>
+    <button id="login-btn" style="width:100%;background:#3f3fc9;color:#fff;font-size:1.1em;padding:12px 0;border:none;border-radius:10px;cursor:pointer;">로그인</button>
+    <div id="login-error" style="color:#d32f2f;text-align:center;margin-top:1em;display:none;"></div>
+  </div>
+  <div class="container" style="max-width: 900px;" id="main-container">
+    <h1 style="text-align:center; color:#3f3fc9; font-size:2.2em; margin-bottom:1.2em;">세계로 나가는 서울 여자 중학교</h1>
+    <div style="border-bottom:1.5px solid #e3eafc; margin-bottom:1.2em;">
+      <div style="display:flex; gap:32px; align-items:center;">
+        <div style="display:flex; gap:8px;">
+          <button class="tab-btn active">타자연습</button>
+          <button class="tab-btn">빈칸 채우기 게임</button>
+          <button class="tab-btn">랭킹</button>
         </div>
       </div>
-      <div id="typing-area" style="display:none;">
-        <div id="text-to-type"></div>
-        <textarea id="user-input" rows="4" placeholder="여기에 입력하세요 (엔터: 완료, Shift+엔터: 줄바꿈)" oninput="checkTyping()"></textarea>
-        <div id="feedback"></div>
-        <button onclick="finishTyping()">완료</button>
-      </div>
-      <div id="result-area" style="display:none;">
-        <div id="result"></div>
-        <button onclick="restart()">다시하기</button>
-        <button onclick="showRanking()">랭킹보기</button>
+    </div>
+    <div class="lang-type-row">
+      <button class="lang-btn active">한글</button>
+      <button class="lang-btn">English</button>
+      <div style="flex:1"></div>
+      <button class="type-btn active">짧은 글</button>
+      <button class="type-btn">긴 글</button>
+    </div>
+    <div style="background:#f8fafd; border-radius:18px; padding:32px 24px 24px 24px; margin-bottom:1.5em;">
+      <div id="typing-practice-area"></div>
+      <label for="typing-input" style="font-size:1.1em; color:#3f3fc9; font-weight:500;">입력</label>
+      <input id="typing-input" type="text" autocomplete="off" style="width:100%; font-size:1.3em; margin:10px 0 18px 0; padding:14px; border-radius:10px; border:1.5px solid #b0bec5; outline:none; background:#fff;" />
+      <div id="typing-lines-below" style="color:#757575; font-size:1.05em; line-height:1.7; margin-bottom:18px;"></div>
+      <div style="color:#5c6bc0; font-size:0.98em; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+        <span style="font-size:1.2em;">ℹ️</span> 현재 줄을 정확하게 입력한 후 Enter 키를 눌러 다음 줄로 이동하세요.
       </div>
     </div>
-    <div id="ranking-chat" style="flex:1;">
-      <h2>실시간 랭킹</h2>
-      <ul id="ranking-list" class="chat-list"></ul>
+    <div class="stat-row">
+      <div class="stat-box"><div class="stat-label">정확도</div><div class="stat-value" id="typing-accuracy">100%</div></div>
+      <div class="stat-box"><div class="stat-label">타수 (타/분)</div><div class="stat-value" id="typing-wpm">0</div></div>
+      <div class="stat-box"><div class="stat-label">오타수</div><div class="stat-value" id="typing-wrong">0</div></div>
+      <div class="stat-box"><div class="stat-label">소요 시간</div><div class="stat-value" id="typing-time">00:00</div></div>
+    </div>
+    <div style="text-align:center; margin-bottom:2em;">
+      <button id="typing-restart-btn" class="restart-btn">다시 시작</button>
+    </div>
+    <div id="ranking-area" style="display:none; margin-top:2em;">
+      <h2 style="color:#3f3fc9; text-align:center; margin-bottom:1em;">타자연습 랭킹</h2>
+      <div id="ranking-mode-btns" style="text-align:center; margin-bottom:1em;"></div>
+      <table class="ranking-table" style="width:100%; background:#fff; border-radius:12px; box-shadow:0 2px 8px #0001; margin-bottom:1.5em; table-layout:fixed;">
+        <thead style="background:#f8fafd;">
+          <tr style="color:#3f3fc9; font-weight:600;">
+            <th style="padding:12px 0; width:60px;">순위</th>
+            <th style="width:120px;">이름</th>
+            <th style="width:90px;">정확도</th>
+            <th style="width:110px;">타수(타/분)</th>
+            <th style="width:170px;">날짜</th>
+            <th style="width:120px;">모드</th>
+          </tr>
+        </thead>
+        <tbody id="ranking-table-body">
+          <tr><td colspan="6" style="text-align:center; color:#888; padding:18px;">아직 기록이 없습니다.</td></tr>
+        </tbody>
+      </table>
+      <style>
+        #ranking-table-body td, #ranking-area th { text-align: center; }
+      </style>
     </div>
   </div>
+  <style>
+    .tab-btn { background:none; border:none; font-size:1.1em; color:#3f3fc9; font-weight:600; padding:8px 18px; border-radius:8px 8px 0 0; cursor:pointer; }
+    .tab-btn.active { background:#3f3fc9; color:#fff; }
+    .tab-btn:hover { background:#3f3fc9; color:#fff; }
+    .lang-btn, .type-btn { background:#f0f3fa; border:none; font-size:1em; color:#3f3fc9; font-weight:600; padding:7px 18px; border-radius:8px; cursor:pointer; }
+    .lang-btn.active, .type-btn.active { background:#3f3fc9; color:#fff; }
+    .stat-box { background:#f8fafd; border-radius:12px; padding:18px 24px; min-width:120px; text-align:center; box-shadow:0 2px 8px #0001; }
+    .stat-label { color:#757575; font-size:1em; margin-bottom:6px; }
+    .stat-value { color:#3f3fc9; font-size:1.4em; font-weight:700; }
+    .restart-btn { background:#3f3fc9; color:#fff; font-size:1.1em; padding:12px 36px; border:none; border-radius:10px; cursor:pointer; }
+    .restart-btn:hover { background:#283593; }
+    .stat-row {
+      display: flex;
+      gap: 18px;
+      justify-content: center;
+      margin-bottom: 1.5em;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+    }
+  </style>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="../src/data.js"></script>

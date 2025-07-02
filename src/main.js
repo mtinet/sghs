@@ -1,6 +1,7 @@
 let user = { id: '', name: '' };
 let mode = '', startTime, endTime, text, tryCount = 1;
 let started = false; // 타이머 시작 여부
+let typingRealtimeTimer = null;
 
 const MODES = [
   { key: 'kor-short', label: '한글 짧은 글' },
@@ -12,6 +13,367 @@ const MODES = [
 let rankingsByMode = {};
 let currentModeIndex = 0;
 let slideInterval = null;
+
+// ===== 타자연습 리뉴얼용 변수 및 함수 추가 =====
+let typingLines = [
+  '서울여자중학교는 세상의 변화에 맞춰',
+  '스스로 배우는 힘을 갖춘 평생학습자를 육성하며,',
+  '언제 어디서나 누구와도 협력하고 일할 수 있는 역량을 기르는 교육을 합니다.',
+  '창의적 사고와 문제 해결 능력을 배양하여',
+  '글로벌 사회에서 주도적인 학습자가 되기 위해 노력합니다.'
+];
+let currentLineIndex = 0;
+let typingStartTime = null;
+let typingEndTime = null;
+let typingStats = { correct: 0, wrong: 0, total: 0, start: null, end: null };
+let totalTypedCount = 0;
+let lastInputLength = 0;
+
+// 영어 문장 배열 추가
+let typingLinesEng = [
+  'Seoul Girls Middle School aims to nurture',
+  'lifelong learners with the ability to learn independently in response to changes in the world.',
+  'The school provides education that fosters the capacity to collaborate and work with anyone, anywhere.',
+  'By cultivating creative thinking and problem-solving skills, we strive to develop proactive learners in the global society.',
+  'Additionally, we create a warm and inclusive school culture where all members participate,',
+  'encouraging every student to gain confidence and pursue their dreams.',
+  'As a vibrant learning environment that brightens the future of our students,',
+  'we will continuously support and encourage them to grow into responsible global leaders who contribute to society.'
+];
+let typingLinesKor = [
+  '서울여자중학교는 세상의 변화에 맞춰',
+  '스스로 배우는 힘을 갖춘 평생학습자를 육성하며,',
+  '언제 어디서나 누구와도 협력하고 일할 수 있는',
+  '역량을 기르는 교육을 합니다.',
+  '창의적 사고와 문제 해결 능력을 배양하여',
+  '글로벌 사회에서 주도적인 학습자가 되기 위해 노력합니다.',
+  '또한, 학교 구성원 모두가 참여하는',
+  '따뜻하고 포용적인 학교 문화를 조성하여,',
+  '모든 학생이 자신감을 갖고 자신의 꿈을 실현할 있도록 장려합니다.',
+  '학생들의 미래를 밝히는 힘찬 배움터로서,',
+  '책임감 있고 사회에 공헌하는 글로벌 리더로',
+  '성장할 수 있도록 끝없이 지원하고 격려하겠습니다.'
+];
+
+// 언어/글 종류 상태
+let currentLang = 'kor'; // kor | eng
+let currentType = 'short'; // short | long
+
+// 버튼 클릭 이벤트 연결
+function setTypingLang(lang) {
+  currentLang = lang;
+  updateTypingLines();
+  updateLangBtnUI();
+  startTypingPractice();
+}
+function setTypingType(type) {
+  currentType = type;
+  updateTypingLines();
+  updateTypeBtnUI();
+  startTypingPractice();
+}
+function updateTypingLines() {
+  if (currentLang === 'kor' && currentType === 'short') {
+    typingLines = typingLinesKor;
+    mode = 'kor-short';
+  } else if (currentLang === 'kor' && currentType === 'long') {
+    typingLines = [typingLinesKor.join(' ')];
+    mode = 'kor-long';
+  } else if (currentLang === 'eng' && currentType === 'short') {
+    typingLines = typingLinesEng;
+    mode = 'eng-short';
+  } else if (currentLang === 'eng' && currentType === 'long') {
+    typingLines = [typingLinesEng.join(' ')];
+    mode = 'eng-long';
+  }
+}
+function updateLangBtnUI() {
+  document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+  if (currentLang === 'kor') document.querySelector('.lang-btn:nth-child(1)').classList.add('active');
+  else document.querySelector('.lang-btn:nth-child(2)').classList.add('active');
+}
+function updateTypeBtnUI() {
+  const typeBtns = document.querySelectorAll('.type-btn');
+  typeBtns.forEach(btn => btn.classList.remove('active'));
+  if (currentType === 'short') typeBtns[0].classList.add('active');
+  else typeBtns[1].classList.add('active');
+}
+
+// 누적 통계 변수
+let totalCorrect = 0;
+let totalWrong = 0;
+let totalLength = 0;
+
+function startTypingPractice() {
+  currentLineIndex = 0;
+  typingStats = { correct: 0, wrong: 0, total: 0, start: null, end: null };
+  typingStartTime = null;
+  typingEndTime = null;
+  totalCorrect = 0;
+  totalWrong = 0;
+  totalLength = 0;
+  renderTypingLine();
+  updateTypingStats();
+  const input = document.getElementById('typing-input');
+  input.value = '';
+  input.disabled = false;
+  input.style.background = '#fff';
+  input.style.border = '1.5px solid #b0bec5';
+  input.focus();
+  document.getElementById('typing-restart-btn').innerText = '다시 시작';
+  // 기존 타이머가 있다면 중지
+  if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
+  // 1초마다 WPM/시간 갱신
+  typingRealtimeTimer = setInterval(() => {
+    document.getElementById('typing-wpm').innerText = calcWPM();
+    document.getElementById('typing-time').innerText = formatTypingTime();
+  }, 1000);
+}
+
+function renderTypingLine() {
+  const typingArea = document.getElementById('typing-practice-area');
+  if (currentType === 'short') {
+    // 짧은 글: 한 줄씩
+    const line = typingLines[currentLineIndex] || '';
+    typingArea.innerHTML = `<div class="typing-line" id="typing-line">${colorizeInput(line, '')}</div>`;
+    // 아래 줄들 표시
+    let below = '';
+    for (let i = currentLineIndex + 1; i < typingLines.length; i++) {
+      below += typingLines[i] + '<br/>';
+    }
+    document.getElementById('typing-lines-below').innerHTML = below;
+  } else {
+    // 긴 글: 전체 문단
+    const line = typingLines[0] || '';
+    typingArea.innerHTML = `<div class="typing-line" id="typing-line">${colorizeInput(line, '')}</div>`;
+    document.getElementById('typing-lines-below').innerHTML = '';
+  }
+}
+
+function handleTypingInput(e) {
+  const input = e.target.value;
+  const line = typingLines[currentLineIndex] || '';
+  // 첫 문장 첫 글자 입력 시에만 시작 시간 기록(최초 1회만)
+  if (!typingStartTime && input.length > 0 && currentLineIndex === 0) {
+    typingStartTime = new Date();
+  }
+  // 실제 타이핑한 키 수 누적
+  if (input.length > lastInputLength) {
+    totalTypedCount += input.length - lastInputLength;
+  }
+  lastInputLength = input.length;
+  // 색상 처리
+  document.getElementById('typing-line').innerHTML = colorizeInput(line, input);
+  // 통계
+  updateTypingStatsRealtime(line, input);
+  // 입력창 스타일(오타시 빨간 테두리)
+  if (input && (input.length > line.length || input.split('').some((ch, i) => ch !== line[i]))) {
+    e.target.style.border = '2px solid #d32f2f';
+    e.target.style.background = '#fff5f5';
+  } else {
+    e.target.style.border = '1.5px solid #b0bec5';
+    e.target.style.background = '#fff';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // 로그인 상태 확인 및 UI 제어
+  const loginArea = document.getElementById('login-area');
+  const mainContainer = document.getElementById('main-container');
+  if (!user.id || !user.name) {
+    loginArea.style.display = '';
+    mainContainer.style.display = 'none';
+  } else {
+    loginArea.style.display = 'none';
+    mainContainer.style.display = '';
+  }
+  // 로그인 버튼 이벤트
+  document.getElementById('login-btn').onclick = function() {
+    const id = document.getElementById('login-id').value.trim();
+    const name = document.getElementById('login-name').value.trim();
+    const errorDiv = document.getElementById('login-error');
+    // 학번: 5자리 숫자, 이름: 한글 2자 이상
+    if (!/^\d{5}$/.test(id)) {
+      errorDiv.innerText = '학번은 5자리 숫자여야 합니다.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    if (!/^[가-힣]{2,}$/.test(name)) {
+      errorDiv.innerText = '이름은 한글 2자 이상이어야 합니다.';
+      errorDiv.style.display = 'block';
+      return;
+    }
+    user.id = id;
+    user.name = name;
+    errorDiv.style.display = 'none';
+    loginArea.style.display = 'none';
+    mainContainer.style.display = '';
+  };
+  // 입력 이벤트 연결
+  const input = document.getElementById('typing-input');
+  input.addEventListener('input', handleTypingInput);
+  input.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleEnterKey();
+    }
+  });
+  // 다시 시작 버튼
+  document.getElementById('typing-restart-btn').onclick = startTypingPractice;
+  // 첫 화면에서는 버튼 텍스트를 '시작하기'로
+  document.getElementById('typing-restart-btn').innerText = '시작하기';
+  // 언어 버튼
+  document.querySelectorAll('.lang-btn')[0].onclick = () => setTypingLang('kor');
+  document.querySelectorAll('.lang-btn')[1].onclick = () => setTypingLang('eng');
+  // 글 종류 버튼
+  document.querySelectorAll('.type-btn')[0].onclick = () => setTypingType('short');
+  document.querySelectorAll('.type-btn')[1].onclick = () => setTypingType('long');
+  // 최초 시작
+  updateTypingLines();
+  updateLangBtnUI();
+  updateTypeBtnUI();
+  startTypingPractice();
+  // 탭 버튼 이벤트 추가
+  const tabBtns = document.querySelectorAll('.tab-btn');
+  tabBtns.forEach((btn, idx) => {
+    btn.addEventListener('click', () => {
+      tabBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      // 탭별 화면 전환
+      const practiceArea = document.querySelector('.container > div:nth-child(4)');
+      const statArea = document.querySelector('.container > div:nth-child(5)');
+      const restartArea = document.querySelector('.container > div:nth-child(6)');
+      const langTypeArea = document.querySelector('.container > div:nth-child(3)');
+      if (btn.textContent.includes('랭킹')) {
+        if (practiceArea) practiceArea.style.display = 'none';
+        if (statArea) statArea.style.display = 'none';
+        if (restartArea) restartArea.style.display = 'none';
+        if (langTypeArea) langTypeArea.style.display = 'none';
+        document.getElementById('ranking-area').style.display = '';
+        showRankingTable(selectedModeKey);
+      } else {
+        if (practiceArea) practiceArea.style.display = '';
+        if (statArea) statArea.style.display = '';
+        if (restartArea) restartArea.style.display = '';
+        if (langTypeArea) langTypeArea.style.display = '';
+        document.getElementById('ranking-area').style.display = 'none';
+      }
+    });
+  });
+  // 랭킹 모드 버튼 렌더링
+  renderRankingModeBtns();
+});
+
+function handleEnterKey() {
+  const input = document.getElementById('typing-input').value;
+  const line = typingLines[currentLineIndex] || '';
+  // 줄별 오타/정확도 누적
+  let correct = 0, wrong = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (input[i] === line[i]) correct++;
+    else wrong++;
+  }
+  totalCorrect += correct;
+  totalWrong += wrong;
+  totalLength += line.length;
+
+  currentLineIndex++;
+  if (currentLineIndex < typingLines.length) {
+    renderTypingLine();
+    document.getElementById('typing-input').value = '';
+    document.getElementById('typing-input').focus();
+  } else {
+    typingEndTime = new Date();
+    showTypingResult();
+  }
+}
+
+function colorizeInput(line, input) {
+  let html = '';
+  for (let i = 0; i < line.length; i++) {
+    if (input[i] === undefined) {
+      html += `<span>${line[i]}</span>`;
+    } else if (input[i] === line[i]) {
+      html += `<span class=\"correct-char\">${line[i]}</span>`;
+    } else {
+      html += `<span class=\"wrong-char\">${line[i]}</span>`;
+    }
+  }
+  return html;
+}
+
+function updateTypingStatsRealtime(line, input) {
+  let correct = 0, wrong = 0;
+  for (let i = 0; i < input.length; i++) {
+    if (input[i] === line[i]) correct++;
+    else wrong++;
+  }
+
+  // 누적값 계산
+  const accCorrect = totalCorrect + correct;
+  const accWrong = totalWrong + wrong;
+  const accTyped = accCorrect + accWrong;
+
+  // 전체 기준 정확도/오타 표시
+  const accuracy = accTyped > 0 ? Math.round((accCorrect / accTyped) * 100) : 100;
+  document.getElementById('typing-accuracy').innerText = `${accuracy}%`;
+  document.getElementById('typing-wrong').innerText = accWrong;
+
+  // 속도/시간은 기존대로
+  document.getElementById('typing-wpm').innerText = calcWPM();
+  document.getElementById('typing-time').innerText = formatTypingTime();
+}
+
+function updateTypingStats() {
+  document.getElementById('typing-accuracy').innerText = '100%';
+  document.getElementById('typing-wpm').innerText = '0';
+  document.getElementById('typing-wrong').innerText = '0';
+  document.getElementById('typing-time').innerText = '00:00';
+}
+
+function calcWPM() {
+  if (!typingStartTime) return 0;
+  const now = new Date();
+  const seconds = (now - typingStartTime) / 1000;
+  if (seconds === 0) return 0;
+  return Math.round((totalTypedCount / seconds) * 60);
+}
+
+function formatTypingTime() {
+  if (!typingStartTime) return '00:00';
+  const now = typingEndTime || new Date();
+  let sec = Math.floor((now - typingStartTime) / 1000);
+  let min = Math.floor(sec / 60);
+  sec = sec % 60;
+  return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+}
+
+function showTypingResult() {
+  // 전체 정확도 계산
+  const totalTyped = totalCorrect + totalWrong;
+  const accuracy = totalTyped > 0 ? Math.round((totalCorrect / totalTyped) * 100) : 100;
+  // 마지막 통계 갱신
+  document.getElementById('typing-input').disabled = true;
+  document.getElementById('typing-input').style.background = '#f0f3fa';
+  document.getElementById('typing-input').style.border = '1.5px solid #b0bec5';
+
+  // 기록 객체 생성 (정확도, 타수, 오타, 시간 등)
+  const wpm = document.getElementById('typing-wpm').innerText;
+  const wrong = document.getElementById('typing-wrong').innerText;
+  const time = document.getElementById('typing-time').innerText;
+  const record = {
+    id: user.id || 'guest',
+    name: user.name || 'guest',
+    mode: mode || 'kor-short',
+    accuracy: Number(accuracy),
+    speed: Number(wpm),
+    wrong: Number(wrong),
+    tryCount: tryCount || 1,
+    timestamp: Date.now()
+  };
+  saveRecord(record, showRankPopup); // 저장 후 등수 팝업
+  if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
+}
 
 function startGame() {
   const id = document.getElementById('student-id').value.trim();
@@ -110,7 +472,7 @@ function restart() {
   document.getElementById('result-area').style.display = 'none';
 }
 
-function saveRecord(record) {
+function saveRecord(record, callback) {
   // 정확도 0% 또는 타수 0이면 저장하지 않음
   if (record.accuracy === 0 || record.speed === 0) return;
   const userKey = record.id + '_' + record.name;
@@ -126,12 +488,14 @@ function saveRecord(record) {
         setTimeout(() => {
           loadRanking();
           loadAllRankings();
+          if (callback) callback(record);
         }, 1000); // 1초 대기 후 랭킹 갱신
       });
     } else {
       setTimeout(() => {
         loadRanking();
         loadAllRankings();
+        if (callback) callback(record);
       }, 1000); // 1초 대기 후 랭킹 갱신
     }
   });
@@ -199,7 +563,7 @@ function showRankingSlide(idx) {
     html += records.map((r, i) => {
       const date = new Date(r.timestamp);
       const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
-      return `<li><b>${i + 1}위</b> [${r.id}] ${r.name}<br><span style=\"font-size:0.9em;color:#888;\">${dateStr}</span><br>정확도 ${r.accuracy}% | 속도 ${r.speed}타/분</li>`;
+      return `<li><b>${i + 1}위</b> [${r.id}_${r.name}]<br><span style=\"font-size:0.9em;color:#888;\">${dateStr}</span><br>정확도 ${r.accuracy}% | 속도 ${r.speed}타/분</li>`;
     }).join('');
   }
   html += '</ul>';
@@ -240,3 +604,68 @@ const firebaseConfig = {
   };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
+
+// 내 기록 등수 팝업
+function showRankPopup(record) {
+  // 전체 랭킹 불러와서 등수 계산
+  db.ref('records').once('value', snapshot => {
+    const records = [];
+    snapshot.forEach(userSnap => {
+      const modeRecord = userSnap.child(record.mode).val();
+      if (modeRecord) records.push(modeRecord);
+    });
+    // 정확도→타수 순 정렬
+    records.sort((a, b) => b.accuracy - a.accuracy || b.speed - a.speed);
+    const rank = records.findIndex(r => r.id === record.id && r.name === record.name && r.timestamp === record.timestamp) + 1;
+    if (rank > 0 && rank <= 5) {
+      alert(`🎉 축하합니다!\n이번 기록은 [${getModeLabel(record.mode)}] 모드 전체 중 [${rank}등]입니다!`);
+    } else if (rank > 0) {
+      alert(`아쉽게도 5등 밖입니다!\n이번 기록은 [${getModeLabel(record.mode)}] 모드 전체 중 [${rank}등]입니다.`);
+    } else {
+      alert('기록이 랭킹에 반영되지 않았습니다.');
+    }
+  });
+}
+
+function getModeLabel(modeKey) {
+  const m = MODES.find(m => m.key === modeKey);
+  return m ? m.label : modeKey;
+}
+
+// 랭킹 테이블 표시 함수
+function showRankingTable(modeKey) {
+  loadAllRankings(() => {
+    let rows = '';
+    const records = rankingsByMode[modeKey] || [];
+    records.forEach((r, i) => {
+      const date = new Date(r.timestamp);
+      const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+      rows += `<tr><td>${i+1}</td><td>${r.id}_${r.name}</td><td>${r.accuracy}%</td><td>${r.speed}</td><td>${dateStr}</td><td>${MODES.find(m=>m.key===modeKey).label}</td></tr>`;
+    });
+    if (records.length === 0) {
+      rows = '<tr><td colspan="6" style="text-align:center; color:#888; padding:18px;">아직 기록이 없습니다.</td></tr>';
+    }
+    document.getElementById('ranking-table-body').innerHTML = rows;
+  });
+}
+
+// 랭킹 모드 필터 버튼 생성 및 이벤트
+const MODES_LABELS = [
+  { key: 'kor-short', label: '한글 짧은 글' },
+  { key: 'kor-long', label: '한글 긴 글' },
+  { key: 'eng-short', label: '영문 짧은 글' },
+  { key: 'eng-long', label: '영문 긴 글' }
+];
+let selectedModeKey = 'kor-short';
+
+function renderRankingModeBtns() {
+  const btns = MODES_LABELS.map(m => `<button class="ranking-mode-btn${selectedModeKey===m.key?' active':''}" data-mode="${m.key}">${m.label}</button>`).join(' ');
+  document.getElementById('ranking-mode-btns').innerHTML = btns;
+  document.querySelectorAll('.ranking-mode-btn').forEach(btn => {
+    btn.onclick = () => {
+      selectedModeKey = btn.getAttribute('data-mode');
+      renderRankingModeBtns();
+      showRankingTable(selectedModeKey);
+    };
+  });
+}

@@ -221,3 +221,41 @@ body {
     max-width: 600px;
   }
 }
+
+.correct-char {
+  color: #2196f3;
+  background: none;
+  font-weight: bold;
+}
+.wrong-char {
+  color: #fff;
+  background: #d32f2f;
+  border-radius: 4px;
+  font-weight: bold;
+  padding: 0 2px;
+}
+.typing-line {
+  font-size: 1.1em;
+  margin-bottom: 18px;
+  min-height: 2.5em;
+  letter-spacing: 0.03em;
+  word-break: break-all;
+}
+#typing-practice-area {
+  margin-bottom: 16px;
+  min-height: 3em;
+}
+
+.lang-btn:hover {
+  background: #e3eafc;
+  color: #3f3fc9;
+}
+
+.type-btn:hover {
+  background: #e3eafc;
+  color: #3f3fc9;
+}
+.type-btn.active {
+  background: #3f3fc9;
+  color: #fff;
+}
