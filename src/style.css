@@ -1,0 +1,223 @@
+body {
+    background: #fff;
+    color: #1a237e;
+    font-size: 20px;
+    font-family: 'Noto Sans KR', 'Malgun Gothic', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+  }
+  .container {
+    max-width: 600px;
+    margin: 40px auto;
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 2px 8px #0001;
+    padding: 32px;
+  }
+  h1, h2 {
+    text-align: center;
+  }
+  button {
+    font-size: 1.1em;
+    margin: 8px;
+    padding: 12px 24px;
+    background: #1a237e;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #3949ab;
+  }
+  #text-to-type {
+    font-size: 1.3em;
+    margin-bottom: 12px;
+    background: #e3eafc;
+    padding: 16px;
+    border-radius: 8px;
+  }
+  textarea {
+    width: 100%;
+    font-size: 1.1em;
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid #b0bec5;
+    margin-bottom: 12px;
+    resize: none;
+  }
+  #feedback {
+    font-size: 1em;
+    color: #d32f2f;
+    margin-bottom: 8px;
+  }
+  @media (max-width: 600px) {
+    .container { padding: 12px; }
+    body { font-size: 16px; }
+    #ranking-chat {
+      height: auto;
+      min-width: 0;
+      max-width: 100%;
+      padding: 4px 8px 16px 8px;
+    }
+  }
+
+  #ranking-chat {
+    background: #e3eafc;
+    border-radius: 12px;
+    padding: 8px 16px 24px 16px;
+    min-width: 220px;
+    max-width: 300px;
+    height: 600px;
+    overflow-y: visible;
+    box-shadow: 0 2px 8px #0001;
+  }
+  .chat-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .chat-list li {
+    margin-bottom: 6px;
+    background: #fff;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 1em;
+    box-shadow: 0 1px 3px #0001;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  /* 학번, 이름 입력창 스타일 개선 */
+  #user-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    background: #e3eafc;
+    padding: 32px 24px 24px 24px;
+    border-radius: 16px;
+    box-shadow: 0 4px 16px #0002;
+    margin-bottom: 24px;
+  }
+  #user-info input[type="text"] {
+    width: 260px;
+    font-size: 1.1em;
+    padding: 14px 16px;
+    border-radius: 10px;
+    border: 1.5px solid #b0bec5;
+    margin-bottom: 0;
+    box-shadow: 0 2px 8px #0001;
+    transition: border 0.2s, box-shadow 0.2s;
+    outline: none;
+    background: #fff;
+  }
+  #user-info input[type="text"]:focus {
+    border: 2px solid #3949ab;
+    box-shadow: 0 0 0 3px #c5cae9;
+  }
+  #user-info button {
+    width: 100%;
+    font-size: 1.2em;
+    padding: 14px 0;
+    background: linear-gradient(90deg, #3949ab 60%, #1a237e 100%);
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px #0001;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  #user-info button:hover {
+    background: linear-gradient(90deg, #5c6bc0 60%, #3949ab 100%);
+    box-shadow: 0 4px 16px #0002;
+  }
+  #user-error {
+    color: #d32f2f;
+    font-size: 1em;
+    margin-top: 4px;
+    min-height: 1.5em;
+    text-align: center;
+  }
+
+.mode-title {
+  text-align: center;
+  font-size: 2.8rem;
+  font-weight: bold;
+  color: #1a237e;
+  margin-top: 3rem;
+  margin-bottom: 2.5rem;
+  letter-spacing: 0.05em;
+  text-shadow: 1px 2px 8px rgba(40,53,147,0.08);
+}
+
+.mode-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 220px);
+  grid-template-rows: repeat(2, 90px);
+  gap: 32px;
+  max-width: 520px;
+  margin: 0 auto 2.5rem auto;
+}
+
+.mode-btn {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background: linear-gradient(90deg, #283593 60%, #3949ab 100%);
+  color: #fff;
+  font-size: 1.35rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 18px;
+  padding: 0;
+  box-shadow: 0 6px 24px rgba(40,53,147,0.13);
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  outline: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mode-btn:hover, .mode-btn:focus {
+  background: linear-gradient(90deg, #3949ab 60%, #283593 100%);
+  transform: translateY(-6px) scale(1.045);
+  box-shadow: 0 12px 32px rgba(40,53,147,0.18);
+}
+
+@media (max-width: 700px) {
+  .mode-title {
+    font-size: 2rem;
+    margin-top: 2rem;
+  }
+  .mode-grid {
+    grid-template-columns: 1fr;
+    grid-template-rows: repeat(4, 80px);
+    max-width: 90vw;
+    grid-gap: 20px;
+  }
+  .mode-btn {
+    font-size: 1.1rem;
+    min-height: 60px;
+    border-radius: 14px;
+  }
+  .container {
+    flex-direction: column;
+    align-items: center;
+  }
+  #ranking-chat {
+    width: 320px;
+    min-width: 0;
+    max-width: 95vw;
+    margin: 0 auto;
+  }
+  .container > div:first-child {
+    width: 100%;
+    max-width: 600px;
+  }
+}

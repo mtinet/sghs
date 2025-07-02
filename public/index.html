@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>서울여중 사명선언문 타자연습</title>
+  <link rel="stylesheet" href="../src/style.css" />
+</head>
+<body>
+  <div class="container" style="display: flex; gap: 24px; max-width: 1000px;">
+    <div style="flex:2;">
+      <h1>사명선언문 타자연습</h1>
+      <div id="user-info">
+        <input type="text" id="student-id" maxlength="5" placeholder="학번(5자리 숫자)" />
+        <input type="text" id="student-name" maxlength="10" placeholder="이름(한글)" />
+        <button onclick="startGame()">게임 시작</button>
+        <div id="user-error"></div>
+      </div>
+      <div id="mode-select" style="display:none">
+        <div class="mode-grid">
+          <button class="mode-btn" onclick="setMode('kor-short')">한글 짧은 글</button>
+          <button class="mode-btn" onclick="setMode('kor-long')">한글 긴 글</button>
+          <button class="mode-btn" onclick="setMode('eng-short')">영문 짧은 글</button>
+          <button class="mode-btn" onclick="setMode('eng-long')">영문 긴 글</button>
+        </div>
+      </div>
+      <div id="typing-area" style="display:none;">
+        <div id="text-to-type"></div>
+        <textarea id="user-input" rows="4" placeholder="여기에 입력하세요 (엔터: 완료, Shift+엔터: 줄바꿈)" oninput="checkTyping()"></textarea>
+        <div id="feedback"></div>
+        <button onclick="finishTyping()">완료</button>
+      </div>
+      <div id="result-area" style="display:none;">
+        <div id="result"></div>
+        <button onclick="restart()">다시하기</button>
+        <button onclick="showRanking()">랭킹보기</button>
+      </div>
+    </div>
+    <div id="ranking-chat" style="flex:1;">
+      <h2>실시간 랭킹</h2>
+      <ul id="ranking-list" class="chat-list"></ul>
+    </div>
+  </div>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script src="../src/data.js"></script>
+  <script src="../src/main.js"></script>
+</body>
+</html>
