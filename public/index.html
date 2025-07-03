@@ -13,6 +13,13 @@
       align-items: center;
       margin-bottom: 1.2em;
     }
+    .wrong-char {
+      color: #fff;
+      background: #2196f3;
+      border-radius: 4px;
+      font-weight: bold;
+      padding: 0 2px;
+    }
   </style>
 </head>
 <body>
@@ -112,5 +119,53 @@
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
   <script src="../src/data.js"></script>
   <script src="../src/main.js"></script>
+  <script>
+    // 줄별 타수 저장용
+    let lineMaxSpeeds = [];
+    let realTypedCount = 0;
+    let lineStartTime = null;
+
+    // keydown 이벤트
+    input.addEventListener('keydown', function(e) {
+      // 한글 자모(자음/모음) 또는 스페이스바만 카운트
+      if (/^[ㄱ-ㅎㅏ-ㅣ가-힣]$/.test(e.key) || e.key === " ") {
+        realTypedCount++;
+      }
+      // Enter로 줄 종료
+      if (e.key === 'Enter') {
+        const seconds = (Date.now() - lineStartTime) / 1000;
+        const wpm = seconds > 0 ? (realTypedCount / seconds) * 60 : 0;
+        lineMaxSpeeds.push(wpm);
+        // 다음 줄로 이동 시 카운터 리셋
+        realTypedCount = 0;
+        lineStartTime = Date.now();
+      }
+    });
+
+    function renderTypingLine() {
+      // ... 기존 코드 ...
+      if (currentType === 'short') {
+        // ... 기존 코드 ...
+        lineStartTime = null; // 줄 시작 시 무조건 초기화
+      }
+      // ... 기존 코드 ...
+    }
+
+    function handleTypingInput(e) {
+      const input = e.target.value;
+      const line = typingLines[currentLineIndex] || '';
+      // 입력이 1글자 이상이고, lineStartTime이 null이면 지금 시각으로 초기화
+      if (input.length > 0 && !lineStartTime) {
+        lineStartTime = Date.now();
+      }
+      // 줄별 타수 계산 및 표시
+      if (lineStartTime && input.length > 0) {
+        const elapsed = (Date.now() - lineStartTime) / 1000;
+        const wpm = elapsed > 0 ? (Math.min(input.length, line.length) / elapsed) * 60 : 0;
+        document.getElementById('typing-wpm').innerText = Math.round(wpm);
+      }
+      // ... 기존 코드 ...
+    }
+  </script>
 </body>
 </html>

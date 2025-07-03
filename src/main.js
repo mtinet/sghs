@@ -28,6 +28,9 @@ let typingEndTime = null;
 let typingStats = { correct: 0, wrong: 0, total: 0, start: null, end: null };
 let totalTypedCount = 0;
 let lastInputLength = 0;
+let maxWpm = 0;
+let lineStartTime = null;
+let isLineTypingStarted = false;
 
 // 영어 문장 배열 추가
 let typingLinesEng = [
@@ -112,6 +115,8 @@ function startTypingPractice() {
   totalCorrect = 0;
   totalWrong = 0;
   totalLength = 0;
+  maxWpm = 0;
+  isLineTypingStarted = false;
   renderTypingLine();
   updateTypingStats();
   const input = document.getElementById('typing-input');
@@ -125,7 +130,11 @@ function startTypingPractice() {
   if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
   // 1초마다 WPM/시간 갱신
   typingRealtimeTimer = setInterval(() => {
-    document.getElementById('typing-wpm').innerText = calcWPM();
+    if (isLineTypingStarted) {
+      document.getElementById('typing-wpm').innerText = calcWPM();
+    } else {
+      document.getElementById('typing-wpm').innerText = '0';
+    }
     document.getElementById('typing-time').innerText = formatTypingTime();
   }, 1000);
 }
@@ -142,6 +151,9 @@ function renderTypingLine() {
       below += typingLines[i] + '<br/>';
     }
     document.getElementById('typing-lines-below').innerHTML = below;
+    lineStartTime = Date.now();
+    isLineTypingStarted = false; // 줄 시작 시 입력 시작 안함
+    document.getElementById('typing-wpm').innerText = '0'; // WPM도 0으로
   } else {
     // 긴 글: 전체 문단
     const line = typingLines[0] || '';
@@ -153,6 +165,10 @@ function renderTypingLine() {
 function handleTypingInput(e) {
   const input = e.target.value;
   const line = typingLines[currentLineIndex] || '';
+  // 입력이 1글자 이상이고, 아직 입력 시작 안했으면 true로
+  if (input.length > 0 && !isLineTypingStarted) {
+    isLineTypingStarted = true;
+  }
   // 첫 문장 첫 글자 입력 시에만 시작 시간 기록(최초 1회만)
   if (!typingStartTime && input.length > 0 && currentLineIndex === 0) {
     typingStartTime = new Date();
@@ -168,8 +184,8 @@ function handleTypingInput(e) {
   updateTypingStatsRealtime(line, input);
   // 입력창 스타일(오타시 빨간 테두리)
   if (input && (input.length > line.length || input.split('').some((ch, i) => ch !== line[i]))) {
-    e.target.style.border = '2px solid #d32f2f';
-    e.target.style.background = '#fff5f5';
+    e.target.style.border = '2px solid #2196f3';
+    e.target.style.background = '#e3eafc';
   } else {
     e.target.style.border = '1.5px solid #b0bec5';
     e.target.style.background = '#fff';
@@ -277,6 +293,17 @@ function handleEnterKey() {
   totalWrong += wrong;
   totalLength += line.length;
 
+  // === 줄별 타수 계산 및 최고값 갱신 ===
+  if (lineStartTime && line.length > 0) {
+    const elapsed = (Date.now() - lineStartTime) / 1000;
+    const wpm = elapsed > 0 ? (line.length / elapsed) * 60 : 0;
+    if (wpm > maxWpm) maxWpm = wpm;
+  }
+
+  // Enter로 줄이 끝나면 WPM 표시를 0으로 초기화
+  document.getElementById('typing-wpm').innerText = '0';
+  isLineTypingStarted = false;
+
   currentLineIndex++;
   if (currentLineIndex < typingLines.length) {
     renderTypingLine();
@@ -358,7 +385,6 @@ function showTypingResult() {
   document.getElementById('typing-input').style.border = '1.5px solid #b0bec5';
 
   // 기록 객체 생성 (정확도, 타수, 오타, 시간 등)
-  const wpm = document.getElementById('typing-wpm').innerText;
   const wrong = document.getElementById('typing-wrong').innerText;
   const time = document.getElementById('typing-time').innerText;
   const record = {
@@ -366,7 +392,7 @@ function showTypingResult() {
     name: user.name || 'guest',
     mode: mode || 'kor-short',
     accuracy: Number(accuracy),
-    speed: Number(wpm),
+    speed: Math.round(maxWpm), // 최고 타수로 저장
     wrong: Number(wrong),
     tryCount: tryCount || 1,
     timestamp: Date.now()
