@@ -2,6 +2,7 @@ let user = { id: '', name: '' };
 let mode = '', startTime, endTime, text, tryCount = 1;
 let started = false; // 타이머 시작 여부
 let typingRealtimeTimer = null;
+let composingIndex = null;
 
 const MODES = [
   { key: 'kor-short', label: '한글 짧은 글' },
@@ -31,6 +32,7 @@ let lastInputLength = 0;
 let maxWpm = 0;
 let lineStartTime = null;
 let isLineTypingStarted = false;
+let lineWpmList = []; // 각 줄별 WPM 저장
 
 // 영어 문장 배열 추가
 let typingLinesEng = [
@@ -52,7 +54,7 @@ let typingLinesKor = [
   '글로벌 사회에서 주도적인 학습자가 되기 위해 노력합니다.',
   '또한, 학교 구성원 모두가 참여하는',
   '따뜻하고 포용적인 학교 문화를 조성하여,',
-  '모든 학생이 자신감을 갖고 자신의 꿈을 실현할 있도록 장려합니다.',
+  '모든 학생이 자신감을 갖고 자신의 꿈을 실현할 수 있도록 장려합니다.',
   '학생들의 미래를 밝히는 힘찬 배움터로서,',
   '책임감 있고 사회에 공헌하는 글로벌 리더로',
   '성장할 수 있도록 끝없이 지원하고 격려하겠습니다.'
@@ -68,12 +70,24 @@ function setTypingLang(lang) {
   updateTypingLines();
   updateLangBtnUI();
   startTypingPractice();
+  // startTypingPractice 이후에 강제 초기화
+  if (mode === 'kor-short' || mode === 'eng-short') {
+    document.getElementById('line-result').innerText = '이번 줄: 0타/분, 소요시간: 0.00초';
+  } else {
+    document.getElementById('line-result').innerText = '';
+  }
 }
 function setTypingType(type) {
   currentType = type;
   updateTypingLines();
   updateTypeBtnUI();
   startTypingPractice();
+  // startTypingPractice 이후에 강제 초기화
+  if (mode === 'kor-short' || mode === 'eng-short') {
+    document.getElementById('line-result').innerText = '이번 줄: 0타/분, 소요시간: 0.00초';
+  } else {
+    document.getElementById('line-result').innerText = '';
+  }
 }
 function updateTypingLines() {
   if (currentLang === 'kor' && currentType === 'short') {
@@ -107,6 +121,8 @@ let totalCorrect = 0;
 let totalWrong = 0;
 let totalLength = 0;
 
+let lineRealtimeTimer = null; // 줄별 실시간 타이머
+
 function startTypingPractice() {
   currentLineIndex = 0;
   typingStats = { correct: 0, wrong: 0, total: 0, start: null, end: null };
@@ -117,6 +133,9 @@ function startTypingPractice() {
   totalLength = 0;
   maxWpm = 0;
   isLineTypingStarted = false;
+  totalTypedCount = 0;
+  lastInputLength = 0;
+  lineStartTime = null;
   renderTypingLine();
   updateTypingStats();
   const input = document.getElementById('typing-input');
@@ -128,15 +147,18 @@ function startTypingPractice() {
   document.getElementById('typing-restart-btn').innerText = '다시 시작';
   // 기존 타이머가 있다면 중지
   if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
-  // 1초마다 WPM/시간 갱신
+  // 10ms마다 WPM/시간 갱신
   typingRealtimeTimer = setInterval(() => {
-    if (isLineTypingStarted) {
-      document.getElementById('typing-wpm').innerText = calcWPM();
-    } else {
-      document.getElementById('typing-wpm').innerText = '0';
-    }
+    document.getElementById('typing-wpm').innerText = calcWPM();
     document.getElementById('typing-time').innerText = formatTypingTime();
-  }, 1000);
+  }, 10);
+  // 안내 문구와 칸을 항상 보이게, 값만 0으로 초기화
+  if (mode === 'kor-short' || mode === 'eng-short') {
+    document.getElementById('line-result').innerText = '이번 줄: 0타/분, 소요시간: 0.00초';
+  } else {
+    document.getElementById('line-result').innerText = '';
+  }
+  if (lineRealtimeTimer) { clearInterval(lineRealtimeTimer); lineRealtimeTimer = null; }
 }
 
 function renderTypingLine() {
@@ -151,20 +173,24 @@ function renderTypingLine() {
       below += typingLines[i] + '<br/>';
     }
     document.getElementById('typing-lines-below').innerHTML = below;
-    lineStartTime = Date.now();
     isLineTypingStarted = false; // 줄 시작 시 입력 시작 안함
-    document.getElementById('typing-wpm').innerText = '0'; // WPM도 0으로
+    lineStartTime = null;
   } else {
     // 긴 글: 전체 문단
     const line = typingLines[0] || '';
     typingArea.innerHTML = `<div class="typing-line" id="typing-line">${colorizeInput(line, '')}</div>`;
     document.getElementById('typing-lines-below').innerHTML = '';
+    lineStartTime = null;
   }
 }
 
 function handleTypingInput(e) {
   const input = e.target.value;
   const line = typingLines[currentLineIndex] || '';
+  // 입력이 1글자 이상이고, lineStartTime이 null이면 지금 시각으로 초기화 (한글/영어 모두)
+  if (input.length > 0 && !lineStartTime) {
+    lineStartTime = Date.now();
+  }
   // 입력이 1글자 이상이고, 아직 입력 시작 안했으면 true로
   if (input.length > 0 && !isLineTypingStarted) {
     isLineTypingStarted = true;
@@ -184,13 +210,43 @@ function handleTypingInput(e) {
   updateTypingStatsRealtime(line, input);
   // 입력창 스타일(오타시 빨간 테두리)
   if (input && (input.length > line.length || input.split('').some((ch, i) => ch !== line[i]))) {
-    e.target.style.border = '2px solid #2196f3';
+    e.target.style.border = '2px solid #2196f3'; // 두께 고정, 색상만 변경
     e.target.style.background = '#e3eafc';
   } else {
-    e.target.style.border = '1.5px solid #b0bec5';
+    e.target.style.border = '2px solid #b0bec5'; // 두께 고정, 색상만 변경
     e.target.style.background = '#fff';
   }
+
+  // ===== "이번 줄" 실시간 업데이트 추가 =====
+  // 짧은글 모드에서만 동작
+  if (mode === 'kor-short' || mode === 'eng-short') {
+    if (lineStartTime && input.length > 0) {
+      // 기존 타이머가 있다면 중지
+      if (!lineRealtimeTimer) {
+        lineRealtimeTimer = setInterval(() => {
+          const elapsed = (Date.now() - lineStartTime) / 1000;
+          const inputLength = countKeystrokes(document.getElementById('typing-input').value);
+          const wpm = (inputLength > 0 && elapsed > 0) ? (inputLength / elapsed) * 60 : 0;
+          document.getElementById('line-result').innerText = `이번 줄: ${Math.round(wpm)}타/분, 소요시간: ${elapsed.toFixed(2)}초`;
+        }, 10);
+      }
+    } else {
+      if (lineRealtimeTimer) { clearInterval(lineRealtimeTimer); lineRealtimeTimer = null; }
+      document.getElementById('line-result').innerText = '이번 줄: 0타/분, 소요시간: 0.00초';
+    }
+  } else {
+    if (lineRealtimeTimer) { clearInterval(lineRealtimeTimer); lineRealtimeTimer = null; }
+    document.getElementById('line-result').innerText = '';
+  }
 }
+
+const typingInput = document.getElementById('typing-input');
+let composing = false;
+typingInput.addEventListener('compositionstart', () => { composing = true; });
+typingInput.addEventListener('compositionend', (e) => {
+  composing = false;
+  // 조합이 끝난 후에도 input 이벤트가 발생하므로 별도 처리 불필요
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   // 로그인 상태 확인 및 UI 제어
@@ -293,16 +349,27 @@ function handleEnterKey() {
   totalWrong += wrong;
   totalLength += line.length;
 
-  // === 줄별 타수 계산 및 최고값 갱신 ===
-  if (lineStartTime && line.length > 0) {
-    const elapsed = (Date.now() - lineStartTime) / 1000;
-    const wpm = elapsed > 0 ? (line.length / elapsed) * 60 : 0;
-    if (wpm > maxWpm) maxWpm = wpm;
+  // === 줄별 타수 계산 및 배열에 저장 ===
+  let lastLineWpm = 0;
+  let lastLineSec = 0;
+  // 입력이 1글자 이상인데 lineStartTime이 null이면 Enter 시점에 강제로 시작
+  let effectiveLineStartTime = lineStartTime;
+  if (!effectiveLineStartTime && countKeystrokes(input) > 0) {
+    effectiveLineStartTime = Date.now();
   }
-
-  // Enter로 줄이 끝나면 WPM 표시를 0으로 초기화
-  document.getElementById('typing-wpm').innerText = '0';
-  isLineTypingStarted = false;
+  if (effectiveLineStartTime && countKeystrokes(input) > 0) {
+    const elapsed = (Date.now() - effectiveLineStartTime) / 1000;
+    const inputLength = countKeystrokes(input); // 실제 입력한 자음/모음/스페이스 수
+    const wpm = elapsed > 0 ? (inputLength / elapsed) * 60 : 0;
+    lineWpmList.push(wpm); // 각 줄별 WPM 저장
+    lastLineWpm = wpm;
+    lastLineSec = elapsed;
+  }
+  // === 줄별 결과 표시 ===
+  const isShortMode = mode === 'kor-short' || mode === 'eng-short';
+  if (isShortMode && lastLineSec > 0 && countKeystrokes(input) > 0) {
+    document.getElementById('line-result').innerText = `이번 줄: ${Math.round(lastLineWpm)}타/분, 소요시간: ${lastLineSec.toFixed(2)}초`;
+  }
 
   currentLineIndex++;
   if (currentLineIndex < typingLines.length) {
@@ -312,23 +379,86 @@ function handleEnterKey() {
   } else {
     typingEndTime = new Date();
     showTypingResult();
+    document.getElementById('line-result').innerText = '';
   }
+  lineStartTime = null; // 줄이 끝날 때마다 타이머 초기화
+  // 줄별 타이머 중지
+  if (lineRealtimeTimer) { clearInterval(lineRealtimeTimer); lineRealtimeTimer = null; }
 }
 
 function colorizeInput(line, input) {
+  if (mode === 'kor-long' || mode === 'eng-long') {
+    const cursor = input.length;
+    let html = '';
+    for (let i = 0; i < line.length; i++) {
+      if (i === cursor) {
+        html += `<span class=\"cursor-char\">${line[i] ?? ''}</span>`;
+      } else if (i < cursor) {
+        // 오타: 입력값이 없거나 다르면 무조건 분홍색
+        if (input[i] === undefined || input[i] !== line[i]) {
+          html += `<span class=\"wrong-char\">${line[i] ?? ''}</span>`;
+        } else {
+          html += line[i] ?? '';
+        }
+      } else {
+        html += line[i] ?? '';
+      }
+    }
+    return html;
+  }
+  // 기존 방식(짧은글)
   let html = '';
   for (let i = 0; i < line.length; i++) {
-    if (input[i] === undefined) {
-      html += `<span>${line[i]}</span>`;
-    } else if (input[i] === line[i]) {
-      html += `<span class=\"correct-char\">${line[i]}</span>`;
+    if (i === input.length) {
+      html += `<span class=\"cursor-char\">${line[i] ?? ''}</span>`;
+    } else if (i < input.length) {
+      if (input[i] === undefined || input[i] !== line[i]) {
+        html += `<span class=\"wrong-char\">${line[i] ?? ''}</span>`;
+      } else {
+        html += line[i] ?? '';
+      }
     } else {
-      html += `<span class=\"wrong-char\">${line[i]}</span>`;
+      html += line[i] ?? '';
     }
   }
   return html;
 }
 
+// 자음, 모음, 스페이스바 개수 세는 함수 (한글 완성형 분해 포함)
+function countKeystrokes(str) {
+  let count = 0;
+  if (mode && mode.startsWith('eng-')) {
+    // 영문 모드: 알파벳만 카운트
+    for (let ch of str) {
+      if (/[a-zA-Z]/.test(ch)) count += 1;
+    }
+  } else {
+    // 한글 모드: 기존 방식
+    for (let ch of str) {
+      if (/[가-힣]/.test(ch)) {
+        const code = ch.charCodeAt(0) - 0xAC00;
+        const jong = code % 28;
+        count += jong ? 3 : 2;
+      } else if (/[ㄱ-ㅎㅏ-ㅣ0-9 !"#$%&'()*+,./:;<=>?@[\\]^_`{|}~\-]/.test(ch)) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+// 줄별 타수 계산 함수 추가
+function calcLineWPM() {
+  if (!lineStartTime) return 0;
+  const now = new Date();
+  const seconds = (now - lineStartTime) / 1000;
+  if (seconds === 0) return 0;
+  const input = document.getElementById('typing-input').value;
+  const keystrokes = countKeystrokes(input);
+  return Math.round((keystrokes / seconds) * 60);
+}
+
+// updateTypingStatsRealtime에서 줄별 타수로 표시
 function updateTypingStatsRealtime(line, input) {
   let correct = 0, wrong = 0;
   for (let i = 0; i < input.length; i++) {
@@ -346,16 +476,17 @@ function updateTypingStatsRealtime(line, input) {
   document.getElementById('typing-accuracy').innerText = `${accuracy}%`;
   document.getElementById('typing-wrong').innerText = accWrong;
 
-  // 속도/시간은 기존대로
+  // 하단 통계(타수/타분)는 전체 기준으로 calcWPM() 사용
   document.getElementById('typing-wpm').innerText = calcWPM();
-  document.getElementById('typing-time').innerText = formatTypingTime();
+  document.getElementById('typing-time').innerText = formatTypingTime(); // 전체 소요 시간(1/100초)
 }
 
+// updateTypingStats는 전체 소요 시간만 표시
 function updateTypingStats() {
   document.getElementById('typing-accuracy').innerText = '100%';
   document.getElementById('typing-wpm').innerText = '0';
   document.getElementById('typing-wrong').innerText = '0';
-  document.getElementById('typing-time').innerText = '00:00';
+  document.getElementById('typing-time').innerText = formatTypingTime();
 }
 
 function calcWPM() {
@@ -363,18 +494,28 @@ function calcWPM() {
   const now = new Date();
   const seconds = (now - typingStartTime) / 1000;
   if (seconds === 0) return 0;
-  return Math.round((totalTypedCount / seconds) * 60);
+  // 전체 입력값을 합쳐서 카운트 (완성된 줄 + 현재 입력 중인 줄)
+  let allInput = '';
+  for (let i = 0; i < currentLineIndex; i++) {
+    allInput += typingLines[i];
+  }
+  allInput += document.getElementById('typing-input').value;
+  const keystrokes = countKeystrokes(allInput);
+  return Math.round((keystrokes / seconds) * 60);
 }
 
 function formatTypingTime() {
-  if (!typingStartTime) return '00:00';
+  if (!typingStartTime) return '00:00.00';
   const now = typingEndTime || new Date();
-  let sec = Math.floor((now - typingStartTime) / 1000);
+  let ms = now - typingStartTime;
+  let sec = Math.floor(ms / 1000);
   let min = Math.floor(sec / 60);
+  let centi = Math.floor((ms % 1000) / 10); // 1/100초
   sec = sec % 60;
-  return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+  return `${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}.${centi.toString().padStart(2, '0')}`;
 }
 
+// showTypingResult에서 typing-time(소요 시간)은 전체 연습 시간으로 고정
 function showTypingResult() {
   // 전체 정확도 계산
   const totalTyped = totalCorrect + totalWrong;
@@ -386,19 +527,24 @@ function showTypingResult() {
 
   // 기록 객체 생성 (정확도, 타수, 오타, 시간 등)
   const wrong = document.getElementById('typing-wrong').innerText;
-  const time = document.getElementById('typing-time').innerText;
+  const time = formatTypingTime(); // 전체 소요 시간
+  // 최고 타수 계산 (줄별 WPM 중 최대값)
+  const maxLineWpm = lineWpmList.length > 0 ? Math.round(Math.max(...lineWpmList)) : 0;
   const record = {
     id: user.id || 'guest',
     name: user.name || 'guest',
     mode: mode || 'kor-short',
     accuracy: Number(accuracy),
-    speed: Math.round(maxWpm), // 최고 타수로 저장
+    speed: maxLineWpm, // 최고 타수로 저장
     wrong: Number(wrong),
     tryCount: tryCount || 1,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    time: time // 전체 소요 시간 저장
   };
   saveRecord(record, showRankPopup); // 저장 후 등수 팝업
   if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
+  document.getElementById('typing-time').innerText = formatTypingTime(); // 결과 화면에도 전체 소요 시간 표시
+  lineWpmList = []; // 결과 표시 후 배열 초기화
 }
 
 function startGame() {
@@ -573,7 +719,7 @@ function loadAllRankings(callback) {
     });
     MODES.forEach(({ key }) => {
       rankingsByMode[key].sort((a, b) => b.accuracy - a.accuracy || b.speed - a.speed);
-      rankingsByMode[key] = rankingsByMode[key].slice(0, 5);
+      rankingsByMode[key] = rankingsByMode[key].slice(0, 20);
     });
     if (callback) callback();
   });
@@ -662,7 +808,7 @@ function getModeLabel(modeKey) {
 function showRankingTable(modeKey) {
   loadAllRankings(() => {
     let rows = '';
-    const records = rankingsByMode[modeKey] || [];
+    const records = (rankingsByMode[modeKey] || []).slice(0, 20);
     records.forEach((r, i) => {
       const date = new Date(r.timestamp);
       const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;

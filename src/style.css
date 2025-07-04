@@ -225,14 +225,26 @@ body {
 .correct-char {
   color: #2196f3;
   background: none;
-  font-weight: bold;
+}
+.cursor-char {
+  color: #00b8ff !important;
+  font-family: inherit;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
 }
 .wrong-char {
-  color: #fff;
-  background: #d32f2f;
-  border-radius: 4px;
-  font-weight: bold;
-  padding: 0 2px;
+  color: #e91e63 !important;
+  font-family: inherit;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  font-weight: normal !important;
+  vertical-align: baseline !important;
 }
 .typing-line {
   font-size: 1.1em;
@@ -240,6 +252,19 @@ body {
   min-height: 2.5em;
   letter-spacing: 0.03em;
   word-break: break-all;
+  font-family: 'monospace', 'D2Coding', 'Fira Mono', 'Consolas', 'Courier New', Courier, monospace;
+  color: #222 !important;
+}
+.typing-line span {
+  font-family: 'monospace', 'D2Coding', 'Fira Mono', 'Consolas', 'Courier New', Courier, monospace !important;
+  line-height: 1.8em !important;
+  font-weight: normal !important;
+  vertical-align: baseline !important;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
 }
 #typing-practice-area {
   margin-bottom: 16px;
