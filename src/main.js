@@ -329,7 +329,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (langTypeArea) langTypeArea.style.display = 'none';
         if (blankGameUI) blankGameUI.style.display = 'none';
         document.getElementById('ranking-area').style.display = '';
-        showRankingTable(selectedModeKey);
+        renderRankingTabs(); // 기존 showRankingTable(selectedModeKey) 대신 랭킹 탭 UI 렌더링
       } else if (btn.textContent.includes('빈칸')) {
         if (practiceArea) practiceArea.style.display = 'none';
         if (statArea) statArea.style.display = 'none';
@@ -349,6 +349,15 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   // 랭킹 모드 버튼 렌더링
   renderRankingModeBtns();
+  // 모드 선택 버튼 이벤트 연결
+  document.querySelectorAll('.mode-btn').forEach(btn => {
+    btn.onclick = () => {
+      setMode(btn.getAttribute('data-mode'));
+      // 버튼 UI 갱신
+      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
 });
 
 function handleEnterKey() {
@@ -833,7 +842,11 @@ function showRankingTable(modeKey) {
     if (records.length === 0) {
       rows = '<tr><td colspan="6" style="text-align:center; color:#888; padding:18px;">아직 기록이 없습니다.</td></tr>';
     }
-    document.getElementById('ranking-table-body').innerHTML = rows;
+    const html = `<table style="width:100%;margin-top:8px;border-collapse:collapse;">
+      <thead><tr style="background:#f5f6fa;"><th>순위</th><th>이름</th><th>정확도</th><th>타수(타/분)</th><th>날짜</th><th>모드</th></tr></thead><tbody>${rows}</tbody></table>`;
+    // 기존 ranking-table-body가 아니라, typing-ranking-ui 내부에 렌더링
+    const tableArea = document.getElementById('ranking-table-area');
+    if (tableArea) tableArea.innerHTML = html;
   });
 }
 
@@ -847,9 +860,10 @@ const MODES_LABELS = [
 let selectedModeKey = 'kor-short';
 
 function renderRankingModeBtns() {
-  const btns = MODES_LABELS.map(m => `<button class="ranking-mode-btn${selectedModeKey===m.key?' active':''}" data-mode="${m.key}">${m.label}</button>`).join(' ');
+  // flex로 감싸고, .ranking-mode-btn2 스타일 적용
+  const btns = `\n    <div style=\"display:flex; gap:24px; justify-content:center; margin-bottom:24px;\">\n      ${MODES_LABELS.map(m => `\n        <button class=\"ranking-mode-btn2${selectedModeKey===m.key?' active':''}\" data-mode=\"${m.key}\">\n          ${m.label}\n        </button>\n      `).join('')}\n    </div>\n  `;
   document.getElementById('ranking-mode-btns').innerHTML = btns;
-  document.querySelectorAll('.ranking-mode-btn').forEach(btn => {
+  document.querySelectorAll('.ranking-mode-btn2').forEach(btn => {
     btn.onclick = () => {
       selectedModeKey = btn.getAttribute('data-mode');
       renderRankingModeBtns();
@@ -1281,3 +1295,133 @@ function updateBlankLangBtnUI() {
     blankLangBtns[1].classList.add('active');
   }
 }
+
+// ===== 랭킹 탭 UI/로직 통합 개선 =====
+// 1. 상단 탭 추가 및 상태 변수
+let rankingTab = 'typing'; // 'typing' | 'blank'
+let blankRankingLang = 'kor'; // 'kor' | 'eng'
+let blankRankingLevel = 'easy'; // 'easy' | 'normal' | 'hard'
+
+// 2. 랭킹 탭 UI 렌더링 함수
+function renderRankingTabs() {
+  const area = document.getElementById('ranking-area');
+  if (!area) return;
+  let html = '';
+  html += `<div style="display:flex;gap:16px;justify-content:center;margin-bottom:24px;">
+    <button id="tab-typing-ranking" class="ranking-tab-btn${rankingTab==='typing'?' active':''}" style="font-size:1.1em;padding:8px 24px;border:none;border-radius:8px;background:${rankingTab==='typing'?'#2a2999':'#e3e3fa'};color:${rankingTab==='typing'?'#fff':'#2a2999'};font-weight:600;">타자연습 랭킹</button>
+    <button id="tab-blank-ranking" class="ranking-tab-btn${rankingTab==='blank'?' active':''}" style="font-size:1.1em;padding:8px 24px;border:none;border-radius:8px;background:${rankingTab==='blank'?'#2a2999':'#e3e3fa'};color:${rankingTab==='blank'?'#fff':'#2a2999'};font-weight:600;">빈칸 채우기 랭킹</button>
+  </div>`;
+  html += `<div id="ranking-tab-content"></div>`;
+  area.innerHTML = html;
+  document.getElementById('tab-typing-ranking').onclick = () => { rankingTab = 'typing'; renderRankingTabs(); };
+  document.getElementById('tab-blank-ranking').onclick = () => { rankingTab = 'blank'; renderRankingTabs(); };
+  renderRankingTabContent();
+}
+
+// 3. 각 탭별 내용 렌더링
+function renderRankingTabContent() {
+  const content = document.getElementById('ranking-tab-content');
+  if (!content) return;
+  if (rankingTab === 'typing') {
+    // 기존 타자연습 랭킹 UI/로직
+    content.innerHTML = `<div id="typing-ranking-ui"></div>`;
+    renderTypingRankingUI();
+  } else {
+    // 빈칸 채우기 랭킹 UI/로직
+    content.innerHTML = `<div id="blank-ranking-ui"></div>`;
+    renderBlankRankingUI();
+  }
+}
+
+// 4. 타자연습 랭킹 UI 기존 함수 호출
+function renderTypingRankingUI() {
+  // 기존 모드별 버튼/테이블을 #typing-ranking-ui 내부에 렌더링
+  const area = document.getElementById('typing-ranking-ui');
+  if (!area) return;
+  area.innerHTML = `<div id="ranking-mode-btns"></div><div id="ranking-table-area"></div>`;
+  renderRankingModeBtns();
+  showRankingTable(selectedModeKey);
+}
+
+// 5. 빈칸 채우기 랭킹 UI
+function renderBlankRankingUI() {
+  const area = document.getElementById('blank-ranking-ui');
+  if (!area) return;
+  // 언어/난이도 필터 버튼
+  let html = '';
+  html += `<div style="display:flex;gap:12px;justify-content:center;margin-bottom:18px;">
+    <button class="blank-lang-btn${blankRankingLang==='kor'?' active':''}" data-lang="kor" style="padding:6px 18px;border:none;border-radius:6px;background:${blankRankingLang==='kor'?'#3f3fc9':'#e3e3fa'};color:${blankRankingLang==='kor'?'#fff':'#3f3fc9'};font-weight:600;">한글</button>
+    <button class="blank-lang-btn${blankRankingLang==='eng'?' active':''}" data-lang="eng" style="padding:6px 18px;border:none;border-radius:6px;background:${blankRankingLang==='eng'?'#3f3fc9':'#e3e3fa'};color:${blankRankingLang==='eng'?'#fff':'#3f3fc9'};font-weight:600;">영어</button>
+    <span style="width:32px;"></span>
+    <button class="blank-level-btn${blankRankingLevel==='easy'?' active':''}" data-level="easy" style="padding:6px 18px;border:none;border-radius:6px;background:${blankRankingLevel==='easy'?'#3f3fc9':'#e3e3fa'};color:${blankRankingLevel==='easy'?'#fff':'#3f3fc9'};font-weight:600;">쉬움</button>
+    <button class="blank-level-btn${blankRankingLevel==='normal'?' active':''}" data-level="normal" style="padding:6px 18px;border:none;border-radius:6px;background:${blankRankingLevel==='normal'?'#3f3fc9':'#e3e3fa'};color:${blankRankingLevel==='normal'?'#fff':'#3f3fc9'};font-weight:600;">보통</button>
+    <button class="blank-level-btn${blankRankingLevel==='hard'?' active':''}" data-level="hard" style="padding:6px 18px;border:none;border-radius:6px;background:${blankRankingLevel==='hard'?'#3f3fc9':'#e3e3fa'};color:${blankRankingLevel==='hard'?'#fff':'#3f3fc9'};font-weight:600;">어려움</button>
+  </div>`;
+  html += `<div id="blank-ranking-table-area"></div>`;
+  area.innerHTML = html;
+  // 버튼 이벤트 연결
+  area.querySelectorAll('.blank-lang-btn').forEach(btn => {
+    btn.onclick = () => { blankRankingLang = btn.getAttribute('data-lang'); renderBlankRankingUI(); };
+  });
+  area.querySelectorAll('.blank-level-btn').forEach(btn => {
+    btn.onclick = () => { blankRankingLevel = btn.getAttribute('data-level'); renderBlankRankingUI(); };
+  });
+  renderBlankRankingTable();
+}
+
+// 6. 빈칸 랭킹 테이블 렌더링
+function renderBlankRankingTable() {
+  const area = document.getElementById('blank-ranking-table-area');
+  if (!area) return;
+  // firebase에서 모든 기록 불러오기
+  db.ref('records').once('value', snapshot => {
+    const records = [];
+    snapshot.forEach(userSnap => {
+      userSnap.forEach(modeSnap => {
+        const rec = modeSnap.val();
+        if (rec && (rec.mode === 'blank-kor' || rec.mode === 'blank-eng')) {
+          records.push(rec);
+        }
+      });
+    });
+    // 필터 적용
+    const langKey = blankRankingLang === 'kor' ? 'blank-kor' : 'blank-eng';
+    const filtered = records.filter(r => r.mode === langKey && r.level === blankRankingLevel);
+    // 정렬: 정확도 → 점수 → 소요시간(짧은 순)
+    filtered.sort((a, b) => b.accuracy - a.accuracy || b.score - a.score || a.time - b.time);
+    // 테이블 렌더링
+    let html = '';
+    html += `<table style="width:100%;margin-top:8px;border-collapse:collapse;">
+      <thead><tr style="background:#f5f6fa;">
+        <th style="padding:8px 0;">순위</th><th>이름</th><th>정확도</th><th>점수</th><th>오타수</th><th>소요시간</th><th>날짜</th><th>언어</th><th>난이도</th>
+      </tr></thead><tbody>`;
+    if (filtered.length === 0) {
+      html += `<tr><td colspan="9" style="text-align:center;color:#888;padding:18px;">아직 기록이 없습니다.</td></tr>`;
+    } else {
+      filtered.slice(0, 20).forEach((r, i) => {
+        const date = new Date(r.timestamp);
+        const dateStr = `${date.getFullYear()}-${(date.getMonth()+1).toString().padStart(2,'0')}-${date.getDate().toString().padStart(2,'0')} ${date.getHours().toString().padStart(2,'0')}:${date.getMinutes().toString().padStart(2,'0')}`;
+        html += `<tr style="text-align:center;">
+          <td>${i+1}</td>
+          <td>${r.id}_${r.name}</td>
+          <td>${r.accuracy}%</td>
+          <td>${typeof r.score !== 'undefined' ? r.score : (typeof r.blankScore !== 'undefined' ? r.blankScore : (typeof r.blank_score !== 'undefined' ? r.blank_score : '-'))}</td>
+          <td>${r.wrong}</td>
+          <td>${r.time ? r.time.toFixed(2)+'초' : '-'}</td>
+          <td>${dateStr}</td>
+          <td>${r.mode==='blank-kor'?'한글':'영어'}</td>
+          <td>${r.level==='easy'?'쉬움':r.level==='normal'?'보통':'어려움'}</td>
+        </tr>`;
+      });
+    }
+    html += '</tbody></table>';
+    area.innerHTML = html;
+  });
+}
+
+// 7. 페이지 로드 시 랭킹 탭 렌더링으로 초기화
+window.onload = function() {
+  loadAllRankings(() => showRankingSlide(0));
+  startRankingSlider(0); // 슬라이드 자동 시작
+  renderRankingTabs(); // 랭킹 탭 UI 렌더링
+};

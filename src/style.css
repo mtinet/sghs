@@ -296,3 +296,28 @@ body {
   background: #3f3fc9;
   color: #fff;
 }
+
+.ranking-mode-btn2,
+.blank-lang-btn,
+.blank-level-btn {
+  padding: 7px 18px;
+  border: none;
+  border-radius: 8px;
+  background: #e3e3fa;
+  color: #3f3fc9;
+  font-weight: 600;
+  font-size: 1em;
+  margin: 0 8px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ranking-mode-btn2.active,
+.blank-lang-btn.active,
+.blank-level-btn.active {
+  background: #3f3fc9;
+  color: #fff;
+}
