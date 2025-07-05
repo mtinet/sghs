@@ -95,6 +95,28 @@
         #ranking-table-body td, #ranking-area th { text-align: center; }
       </style>
     </div>
+    <div id="blank-game-ui" style="display:none; background:#f8fafd; border-radius:18px; padding:32px 24px 24px 24px; margin-bottom:1.5em;">
+      <div style="display:flex; align-items:center; gap:16px; margin-bottom:18px;">
+        <button class="lang-btn active">한글</button>
+        <button class="lang-btn">English</button>
+        <div style="flex:1"></div>
+        <label for="blank-difficulty" style="font-weight:600; color:#3f3fc9; margin-right:6px;">난이도:</label>
+        <select id="blank-difficulty" style="padding:6px 12px; border-radius:6px; border:1.5px solid #b0bec5;">
+          <option value="easy">쉬움</option>
+          <option value="normal">보통</option>
+          <option value="hard">어려움</option>
+        </select>
+      </div>
+      <div style="text-align:center; margin-bottom:18px;">
+        <button id="blank-start-btn" style="background:#3f3fc9;color:#fff;font-size:1.1em;padding:12px 36px;border:none;border-radius:10px;cursor:pointer;">게임 시작</button>
+      </div>
+      <div id="blank-game-area"></div>
+      <div id="blank-game-info-row" style="display:flex; justify-content:space-between; align-items:center; margin-top:32px; background:#fff; border-radius:12px; padding:18px 24px; box-shadow:0 2px 8px #0001;">
+        <div><span style="color:#3f3fc9; font-size:1.1em;">맞춘 개수</span><br/><span id="blank-correct" style="color:#283593; font-size:1.4em; font-weight:700;">0 / 10</span></div>
+        <div><span style="color:#3f3fc9; font-size:1.1em;">점수</span><br/><span id="blank-score" style="color:#283593; font-size:1.4em; font-weight:700;">0</span></div>
+        <div><span style="color:#3f3fc9; font-size:1.1em;">남은 시간</span><br/><span id="blank-timer" style="color:#283593; font-size:1.4em; font-weight:700;">02:00</span></div>
+      </div>
+    </div>
   </div>
   <style>
     .tab-btn { background:none; border:none; font-size:1.1em; color:#3f3fc9; font-weight:600; padding:8px 18px; border-radius:8px 8px 0 0; cursor:pointer; }
@@ -118,7 +140,6 @@
   </style>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
-  <script src="../src/data.js"></script>
   <script src="../src/main.js"></script>
   <script>
     // 줄별 타수 저장용

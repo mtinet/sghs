@@ -36,14 +36,13 @@ let lineWpmList = []; // 각 줄별 WPM 저장
 
 // 영어 문장 배열 추가
 let typingLinesEng = [
-  'Seoul Girls Middle School aims to nurture',
-  'lifelong learners with the ability to learn independently in response to changes in the world.',
-  'The school provides education that fosters the capacity to collaborate and work with anyone, anywhere.',
-  'By cultivating creative thinking and problem-solving skills, we strive to develop proactive learners in the global society.',
-  'Additionally, we create a warm and inclusive school culture where all members participate,',
-  'encouraging every student to gain confidence and pursue their dreams.',
-  'As a vibrant learning environment that brightens the future of our students,',
-  'we will continuously support and encourage them to grow into responsible global leaders who contribute to society.'
+  "Seoul Girls Middle School aims to nurture lifelong learners with the ability to learn independently in response to changes in the world.",
+  "The school provides education that fosters the capacity to collaborate and work with anyone, anywhere.",
+  "By cultivating creative thinking and problem-solving skills, we strive to develop proactive learners in the global society.",
+  "Additionally, we create a warm and inclusive school culture where all members participate,",
+  "encouraging every student to gain confidence and pursue their dreams.",
+  "As a vibrant learning environment that brightens the future of our students,",
+  "we will continuously support and encourage them to grow into responsible global leaders who contribute to society."
 ];
 let typingLinesKor = [
   '서울여자중학교는 세상의 변화에 맞춰',
@@ -295,15 +294,21 @@ document.addEventListener('DOMContentLoaded', () => {
   // 첫 화면에서는 버튼 텍스트를 '시작하기'로
   document.getElementById('typing-restart-btn').innerText = '시작하기';
   // 언어 버튼
-  document.querySelectorAll('.lang-btn')[0].onclick = () => setTypingLang('kor');
-  document.querySelectorAll('.lang-btn')[1].onclick = () => setTypingLang('eng');
+  document.querySelectorAll('.lang-btn').forEach((btn, idx) => {
+    btn.onclick = () => setTypingLang(idx === 0 ? 'kor' : 'eng');
+  });
   // 글 종류 버튼
   document.querySelectorAll('.type-btn')[0].onclick = () => setTypingType('short');
   document.querySelectorAll('.type-btn')[1].onclick = () => setTypingType('long');
+  // 빈칸 채우기 게임 언어 버튼 이벤트 연결
+  document.querySelectorAll('#blank-game-ui .lang-btn').forEach((btn, idx) => {
+    btn.onclick = () => setBlankLang(idx === 0 ? 'kor' : 'eng');
+  });
   // 최초 시작
   updateTypingLines();
   updateLangBtnUI();
   updateTypeBtnUI();
+  updateBlankLangBtnUI(); // 빈칸 채우기 게임 언어 버튼 UI도 초기화
   startTypingPractice();
   // 탭 버튼 이벤트 추가
   const tabBtns = document.querySelectorAll('.tab-btn');
@@ -316,18 +321,28 @@ document.addEventListener('DOMContentLoaded', () => {
       const statArea = document.querySelector('.container > div:nth-child(5)');
       const restartArea = document.querySelector('.container > div:nth-child(6)');
       const langTypeArea = document.querySelector('.container > div:nth-child(3)');
+      const blankGameUI = document.getElementById('blank-game-ui');
       if (btn.textContent.includes('랭킹')) {
         if (practiceArea) practiceArea.style.display = 'none';
         if (statArea) statArea.style.display = 'none';
         if (restartArea) restartArea.style.display = 'none';
         if (langTypeArea) langTypeArea.style.display = 'none';
+        if (blankGameUI) blankGameUI.style.display = 'none';
         document.getElementById('ranking-area').style.display = '';
         showRankingTable(selectedModeKey);
+      } else if (btn.textContent.includes('빈칸')) {
+        if (practiceArea) practiceArea.style.display = 'none';
+        if (statArea) statArea.style.display = 'none';
+        if (restartArea) restartArea.style.display = 'none';
+        if (langTypeArea) langTypeArea.style.display = 'none';
+        if (blankGameUI) blankGameUI.style.display = '';
+        document.getElementById('ranking-area').style.display = 'none';
       } else {
         if (practiceArea) practiceArea.style.display = '';
         if (statArea) statArea.style.display = '';
         if (restartArea) restartArea.style.display = '';
         if (langTypeArea) langTypeArea.style.display = '';
+        if (blankGameUI) blankGameUI.style.display = 'none';
         document.getElementById('ranking-area').style.display = 'none';
       }
     });
@@ -840,4 +855,341 @@ function renderRankingModeBtns() {
       showRankingTable(selectedModeKey);
     };
   });
+}
+
+// ===== 빈칸 채우기 게임용 중요 단어 선정 및 난이도별 빈칸 배분 함수 =====
+
+// --- 명사만 추출하는 함수 ---
+function extractNouns(sentence) {
+  const exclude = [
+    '은','는','이','가','을','를','에','의','와','과','도','로','에서','에게','한','및','또한','그리고','하지만','또','더','수','있도록','위해','하여','하고','하며','으로','까지','부터','처럼','만큼','밖에','마다','보다','때문에','중','등','같이','같은','같다','된다','합니다','합니다.','노력합니다','조성하여','장려합니다','밝히는','배움터로서','공헌하는','성장할','있도록','끝없이','지원하고','격려하겠습니다'
+  ];
+  return sentence.split(/\s+/).filter(word =>
+    word.length > 1 &&
+    /^[가-힣]+$/.test(word) &&
+    !exclude.includes(word)
+  );
+}
+
+// --- 힌트 데이터: 실제 등장 명사만 ---
+const BLANK_HINTS = {
+  '변화': '세상의 흐름이나 상태가 바뀌는 것',
+  '평생학습자': '평생 동안 배우는 사람',
+  '협력': '서로 힘을 합쳐 함께 일함',
+  '역량': '어떤 일을 해낼 수 있는 힘이나 능력',
+  '교육': '지식이나 기술, 태도 등을 가르치고 배우는 활동',
+  '사고': '생각하는 것',
+  '문제': '해결해야 할 일이나 상황',
+  '능력': '어떤 일을 해낼 수 있는 힘',
+  '사회': '사람들이 모여 이루는 집단',
+  '학습자': '배우는 사람',
+  '학교': '학생과 교사가 함께 공부하는 곳',
+  '구성원': '어떤 집단을 이루는 사람',
+  '참여': '어떤 일에 끼어들어 함께함',
+  '문화': '사람들의 생활양식, 가치관, 행동양식',
+  '학생': '학교에서 공부하는 사람',
+  '자신감': '자기 자신을 믿는 마음',
+  '꿈': '이루고 싶은 목표나 바람',
+  '미래': '앞으로 다가올 시간',
+  '배움터': '배우는 장소',
+  '책임감': '자신의 역할이나 의무를 다하려는 마음',
+  '리더': '다른 사람을 이끄는 사람',
+  '지원': '도와주는 것',
+  '격려': '힘을 내라고 북돋아 주는 것',
+  '장려': '좋은 일을 하도록 힘을 북돋아 줌'
+};
+
+const BLANK_HINTS_ENG = {
+  "learners": "People who are learning",
+  "ability": "The power or skill to do something",
+  "education": "The process of teaching or learning",
+  "collaborate": "To work together with others",
+  "confidence": "Belief in yourself and your abilities",
+  "dreams": "Things you want to achieve in the future",
+  "leaders": "People who guide or direct others",
+  "society": "A community of people living together",
+  "future": "The time yet to come",
+  "support": "To help or assist",
+  "encourage": "To give hope or confidence to someone"
+};
+
+// ===== 빈칸 채우기 게임 상태 및 로직 뼈대 =====
+let blankGame = {
+  playing: false,
+  timer: null,
+  timeLeft: 30,
+  blanks: [], // {idx, answer, userInput}
+  sentence: '',
+  level: 'easy',
+  score: 0,
+  total: 0,
+  correct: 0,
+  wrong: 0,
+  startTime: null,
+  endTime: null
+};
+
+// --- 게임 시작 버튼 이벤트 ---
+document.getElementById('blank-start-btn').onclick = function() {
+  const level = document.getElementById('blank-difficulty').value;
+  startBlankGame(level);
+  renderBlankGame();
+  startBlankGameTimer();
+};
+
+// --- 난이도 드롭다운 변경 시 미리보기로 빈칸 갱신 ---
+document.getElementById('blank-difficulty').onchange = function() {
+  if (!blankGame.playing) {
+    const level = this.value;
+    startBlankGame(level);
+    renderBlankGame();
+  }
+};
+
+// Fisher-Yates 셔플 함수 (startBlankGame보다 위에 위치)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// 명사+조사 분리 함수
+function splitNounJosa(word) {
+  for (const noun of Object.keys(BLANK_HINTS)) {
+    if (word.startsWith(noun)) {
+      return { noun, josa: word.slice(noun.length) };
+    }
+  }
+  return null;
+}
+
+function startBlankGame(level = 'easy') {
+  blankGame.level = level;
+  // 언어별 문장/힌트 선택
+  let sentence, HINTS;
+  if (currentLang === 'kor') {
+    sentence = typingLinesKor.join(' ');
+    HINTS = BLANK_HINTS;
+  } else {
+    sentence = typingLinesEng.join(' ');
+    HINTS = BLANK_HINTS_ENG;
+  }
+  blankGame.sentence = sentence;
+  let blankCount = getBlankCountByLevel(Object.keys(HINTS), level);
+  const allWords = sentence.split(/\s+/);
+  // BLANK_HINTS 명사+조사 분리하여 후보 추출 (영어는 조사 없음)
+  const blankIndexes = [];
+  const blankMeta = {};
+  allWords.forEach((word, idx) => {
+    if (currentLang === 'kor') {
+      const split = splitNounJosa(word);
+      if (split && HINTS[split.noun]) {
+        blankIndexes.push(idx);
+        blankMeta[idx] = split; // {noun, josa}
+      }
+    } else {
+      // 영어: 단어 소문자 기준
+      const w = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+      if (HINTS[w]) {
+        blankIndexes.push(idx);
+        blankMeta[idx] = { noun: w, josa: '' };
+      }
+    }
+  });
+  if (blankCount > blankIndexes.length) blankCount = blankIndexes.length;
+  const shuffled = shuffleArray([...blankIndexes]);
+  const selectedIndexes = shuffled.slice(0, blankCount);
+  blankGame.blanks = selectedIndexes.map(idx => ({
+    idx,
+    answer: blankMeta[idx].noun,
+    userInput: '',
+    hint: HINTS[blankMeta[idx].noun],
+    josa: blankMeta[idx].josa
+  }));
+  blankGame.playing = true;
+  blankGame.timeLeft = 120;
+  blankGame.score = 0;
+  blankGame.correct = 0;
+  blankGame.wrong = 0;
+  blankGame.startTime = Date.now();
+  blankGame.endTime = null;
+}
+
+function renderBlankGame() {
+  let area = document.getElementById('blank-game-area');
+  if (!area) {
+    area = document.createElement('div');
+    area.id = 'blank-game-area';
+    area.style.margin = '32px 0';
+    document.querySelector('.container').appendChild(area);
+  }
+  let html = '';
+  const allWords = blankGame.sentence.split(/\s+/);
+  const wordsPerLine = 18;
+  for (let i = 0; i < allWords.length; i += wordsPerLine) {
+    let lineHtml = '';
+    for (let j = i; j < i + wordsPerLine && j < allWords.length; j++) {
+      const blankIdx = blankGame.blanks.findIndex(b => b.idx === j);
+      if (blankIdx !== -1) {
+        const josa = blankGame.blanks[blankIdx].josa || '';
+        lineHtml += `<span class='blank-input-wrap' style='position:relative;display:inline-block;'>`;
+        lineHtml += `<input type=\"text\" class=\"blank-input\" data-idx=\"${blankIdx}\" id=\"blank-input-${blankIdx}\" name=\"blank-input-${blankIdx}\" value=\"${blankGame.blanks[blankIdx]?.userInput || ''}\" style=\"width:70px; margin:0 4px; text-align:center;\" autocomplete=\"off\" />`;
+        if (josa) lineHtml += `<span style='font-weight:normal;'>${josa} </span>`;
+        lineHtml += `</span>`;
+      } else {
+        lineHtml += allWords[j] + ' ';
+      }
+    }
+    html += `<div style='margin-bottom:10px;'>${lineHtml.trim()}</div>`;
+  }
+  area.innerHTML = html;
+  area.querySelectorAll('.blank-input').forEach(input => {
+    input.addEventListener('input', e => {
+      const idx = Number(e.target.getAttribute('data-idx'));
+      updateBlankGameInput(idx, e.target.value);
+    });
+    // focus 이벤트에서 setTimeout(0)으로 팝업 띄우기
+    input.addEventListener('focus', e => {
+      const idx = Number(e.target.getAttribute('data-idx'));
+      setTimeout(() => {
+        showHintPopup(blankGame.blanks[idx]?.hint, e.target);
+      }, 0);
+    });
+  });
+  updateBlankGameInfo();
+}
+
+function updateBlankGameInfo() {
+  document.getElementById('blank-correct').innerText = `${blankGame.score} / ${blankGame.blanks.length}`;
+  document.getElementById('blank-score').innerText = blankGame.score;
+  document.getElementById('blank-timer').innerText = formatBlankTime(blankGame.timeLeft);
+}
+
+function formatBlankTime(sec) {
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+}
+
+function startBlankGameTimer() {
+  if (blankGame.timer) clearInterval(blankGame.timer);
+  blankGame.timer = setInterval(() => {
+    blankGame.timeLeft -= 0.01;
+    if (blankGame.timeLeft <= 0) {
+      blankGame.timeLeft = 0;
+      endBlankGame();
+    }
+    renderBlankGame(); // 타이머마다 하단 정보 갱신
+  }, 10);
+}
+
+function updateBlankGameInput(idx, value) {
+  if (!blankGame.playing) return;
+  blankGame.blanks[idx].userInput = value;
+  // 정답 체크 및 점수 갱신 (명사 부분만 비교)
+  let correct = 0;
+  blankGame.blanks.forEach(b => {
+    if (b.userInput.trim() === b.answer) correct++;
+  });
+  blankGame.score = correct;
+  updateBlankGameInfo();
+  if (blankGame.blanks.every(b => b.userInput.trim().length > 0)) {
+    endBlankGame();
+  }
+}
+
+function endBlankGame() {
+  blankGame.playing = false;
+  blankGame.endTime = Date.now();
+  if (blankGame.timer) clearInterval(blankGame.timer);
+  showBlankGameResult();
+}
+
+function showBlankGameResult() {
+  const total = blankGame.blanks.length;
+  const correct = blankGame.blanks.filter(b => b.userInput.trim() === b.answer).length;
+  const wrong = total - correct;
+  const time = ((blankGame.endTime - blankGame.startTime) / 1000).toFixed(2);
+  const html = `
+    <div id=\"blank-result-modal\" style=\"position:fixed;left:0;top:0;width:100vw;height:100vh;background:#0007;z-index:1000;display:flex;align-items:center;justify-content:center;\">
+      <div style=\"background:#fff;padding:36px 48px;border-radius:18px;min-width:320px;text-align:center;\">
+        <h2 style=\"color:#3f3fc9;margin-bottom:1em;\">결과</h2>
+        <div style=\"font-size:1.2em;margin-bottom:1em;\">정확도: <b>${Math.round((correct/total)*100)}%</b></div>
+        <div style=\"font-size:1.2em;margin-bottom:1em;\">점수: <b>${blankGame.score}</b></div>
+        <div style=\"font-size:1.2em;margin-bottom:1em;\">오타수: <b>${wrong}</b></div>
+        <div style=\"font-size:1.2em;margin-bottom:1em;\">소요 시간: <b>${time}초</b></div>
+        <button id=\"blank-result-close\" style=\"background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;\">닫기</button>
+      </div>
+    </div>
+  `;
+  document.body.insertAdjacentHTML('beforeend', html);
+  document.getElementById('blank-result-close').onclick = function() {
+    const modal = document.getElementById('blank-result-modal');
+    if (modal) modal.remove();
+    // 게임 화면(빈칸 채우기 게임 탭) 유지, 로그인 상태로 돌아가지 않음
+  };
+}
+
+// 난이도별 빈칸 개수 반환 함수 복원
+function getBlankCountByLevel(words, level) {
+  if (level === 'easy') return Math.min(3, words.length);
+  if (level === 'normal') return Math.min(6, words.length);
+  if (level === 'hard') return Math.min(10, words.length);
+  return 3;
+}
+
+// 힌트 팝업 함수(2초간 표시, input 아래에 위치, pointer-events: none, 부모에 붙임)
+function showHintPopup(hint, inputEl) {
+  if (!hint || !inputEl) return;
+  // 기존 팝업 제거
+  const old = document.getElementById('blank-hint-popup');
+  if (old) old.remove();
+  const popup = document.createElement('div');
+  popup.id = 'blank-hint-popup';
+  popup.innerText = hint;
+  popup.style.position = 'absolute';
+  popup.style.background = '#fff';
+  popup.style.color = '#3f3fc9';
+  popup.style.fontSize = '1em';
+  popup.style.padding = '12px 18px';
+  popup.style.borderRadius = '12px';
+  popup.style.boxShadow = '0 2px 8px #0002';
+  popup.style.zIndex = '2000';
+  popup.style.pointerEvents = 'none';
+  // input 위치 계산
+  const rect = inputEl.getBoundingClientRect();
+  popup.style.left = rect.left + window.scrollX + 'px';
+  popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
+  document.body.appendChild(popup);
+  // 2초간 focus 반복만 (blur는 막지 않음)
+  let focusInterval = setInterval(() => { inputEl.focus(); }, 50);
+  setTimeout(() => {
+    clearInterval(focusInterval);
+    popup.remove();
+  }, 2000);
+}
+
+// 빈칸 채우기 게임 언어 변경 함수
+function setBlankLang(lang) {
+  currentLang = lang;
+  updateBlankLangBtnUI();
+  // 게임이 진행 중이 아니면 미리보기로 빈칸 갱신
+  if (!blankGame.playing) {
+    const level = document.getElementById('blank-difficulty').value;
+    startBlankGame(level);
+    renderBlankGame();
+  }
+}
+
+// 빈칸 채우기 게임 언어 버튼 UI 업데이트
+function updateBlankLangBtnUI() {
+  const blankLangBtns = document.querySelectorAll('#blank-game-ui .lang-btn');
+  blankLangBtns.forEach(btn => btn.classList.remove('active'));
+  if (currentLang === 'kor') {
+    blankLangBtns[0].classList.add('active');
+  } else {
+    blankLangBtns[1].classList.add('active');
+  }
 }
