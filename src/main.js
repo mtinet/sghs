@@ -146,11 +146,11 @@ function startTypingPractice() {
   document.getElementById('typing-restart-btn').innerText = '다시 시작';
   // 기존 타이머가 있다면 중지
   if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
-  // 10ms마다 WPM/시간 갱신
+  // 100ms마다 WPM/시간 갱신
   typingRealtimeTimer = setInterval(() => {
     document.getElementById('typing-wpm').innerText = calcWPM();
     document.getElementById('typing-time').innerText = formatTypingTime();
-  }, 10);
+  }, 100);
   // 안내 문구와 칸을 항상 보이게, 값만 0으로 초기화
   if (mode === 'kor-short' || mode === 'eng-short') {
     document.getElementById('line-result').innerText = '이번 줄: 0타/분, 소요시간: 0.00초';
@@ -660,8 +660,9 @@ function restart() {
 }
 
 function saveRecord(record, callback) {
-  // 정확도 0% 또는 타수 0이면 저장하지 않음
-  if (record.accuracy === 0 || record.speed === 0) return;
+  // 빈칸 채우기 게임은 speed 0이어도 저장, 나머지는 기존 조건 유지
+  const isBlankGame = record.mode === 'blank-kor' || record.mode === 'blank-eng';
+  if ((!isBlankGame && (record.accuracy === 0 || record.speed === 0)) || (isBlankGame && record.accuracy === 0)) return;
   const userKey = record.id + '_' + record.name;
   const ref = db.ref('records/' + userKey + '/' + record.mode);
   ref.once('value', snapshot => {
@@ -999,6 +1000,7 @@ function startBlankGame(level = 'easy') {
     }
   });
   if (blankCount > blankIndexes.length) blankCount = blankIndexes.length;
+  // 랜덤하게 섞어서 앞에서부터 선택 (셔플 복원)
   const shuffled = shuffleArray([...blankIndexes]);
   const selectedIndexes = shuffled.slice(0, blankCount);
   blankGame.blanks = selectedIndexes.map(idx => ({
@@ -1027,37 +1029,81 @@ function renderBlankGame() {
   }
   let html = '';
   const allWords = blankGame.sentence.split(/\s+/);
-  const wordsPerLine = 18;
-  for (let i = 0; i < allWords.length; i += wordsPerLine) {
-    let lineHtml = '';
-    for (let j = i; j < i + wordsPerLine && j < allWords.length; j++) {
-      const blankIdx = blankGame.blanks.findIndex(b => b.idx === j);
-      if (blankIdx !== -1) {
-        const josa = blankGame.blanks[blankIdx].josa || '';
-        lineHtml += `<span class='blank-input-wrap' style='position:relative;display:inline-block;'>`;
-        lineHtml += `<input type=\"text\" class=\"blank-input\" data-idx=\"${blankIdx}\" id=\"blank-input-${blankIdx}\" name=\"blank-input-${blankIdx}\" value=\"${blankGame.blanks[blankIdx]?.userInput || ''}\" style=\"width:70px; margin:0 4px; text-align:center;\" autocomplete=\"off\" />`;
-        if (josa) lineHtml += `<span style='font-weight:normal;'>${josa} </span>`;
-        lineHtml += `</span>`;
-      } else {
-        lineHtml += allWords[j] + ' ';
+  // 한 문단(한 줄)로 보이도록 수정
+  let lineHtml = '';
+  for (let j = 0; j < allWords.length; j++) {
+    const blankIdx = blankGame.blanks.findIndex(b => b.idx === j);
+    if (blankIdx !== -1) {
+      const josa = blankGame.blanks[blankIdx].josa || '';
+      const blank = blankGame.blanks[blankIdx];
+      let bgColor = '#fff'; // 기본 배경색
+      if (blank.userInput.trim() !== '') {
+        if (blank.userInput.trim() === blank.answer) {
+          bgColor = '#e3f2fd'; // 연한 하늘색 (정답)
+        } else {
+          bgColor = '#fce4ec'; // 연한 분홍색 (오답)
+        }
       }
+      lineHtml += `<span class='blank-input-wrap' style='position:relative;display:inline-block;'>`;
+      lineHtml += `<input type=\"text\" class=\"blank-input\" data-idx=\"${blankIdx}\" id=\"blank-input-${blankIdx}\" name=\"blank-input-${blankIdx}\" value=\"${blank.userInput || ''}\" style=\"width:70px; margin:0 4px; text-align:center; background-color:${bgColor};\" autocomplete=\"off\" />`;
+      if (josa) lineHtml += `<span style='font-weight:normal;'>${josa} </span>`;
+      lineHtml += `</span>`;
+    } else {
+      lineHtml += allWords[j] + ' ';
     }
-    html += `<div style='margin-bottom:10px;'>${lineHtml.trim()}</div>`;
+  }
+  html += `<div style='margin-bottom:10px;'>${lineHtml.trim()}</div>`;
+  // 제출 버튼 추가 (게임 중일 때만)
+  if (blankGame.playing) {
+    html += `<div style='margin-top:24px;text-align:center;'><button id=\"blank-submit-btn\" style=\"background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;\">제출</button></div>`;
+  } else {
+    html += `<div style='margin-top:24px;text-align:center;'><button id=\"blank-submit-btn\" style=\"background:#b0bec5;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;" disabled>제출</button></div>`;
   }
   area.innerHTML = html;
-  area.querySelectorAll('.blank-input').forEach(input => {
+  const blankInputs = area.querySelectorAll('.blank-input');
+  area.querySelectorAll('.blank-input').forEach((input, idx) => {
     input.addEventListener('input', e => {
       const idx = Number(e.target.getAttribute('data-idx'));
       updateBlankGameInput(idx, e.target.value);
     });
-    // focus 이벤트에서 setTimeout(0)으로 팝업 띄우기
+    // Enter나 Tab 키로 다음 빈칸으로 이동
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        const currentIdx = Number(e.target.getAttribute('data-idx'));
+        // blankInputs는 위에서 아래, 왼쪽에서 오른쪽 순서로 정렬되어 있음
+        const thisInput = input;
+        const inputsArr = Array.from(blankInputs);
+        const thisIdx = inputsArr.indexOf(thisInput);
+        if (thisIdx < blankInputs.length - 1) {
+          // 다음 빈칸으로 이동
+          blankInputs[thisIdx + 1].focus();
+        } else {
+          // 마지막 빈칸이면 제출 버튼으로 포커스 이동
+          const submitBtn = document.getElementById('blank-submit-btn');
+          if (submitBtn) submitBtn.focus();
+        }
+      }
+    });
+    // 클릭 시 힌트 표시 (기존 팝업 제거 후 새로 표시)
     input.addEventListener('focus', e => {
+      // 기존 힌트 팝업 제거
+      const oldPopup = document.getElementById('blank-hint-popup');
+      if (oldPopup) oldPopup.remove();
+      
       const idx = Number(e.target.getAttribute('data-idx'));
       setTimeout(() => {
         showHintPopup(blankGame.blanks[idx]?.hint, e.target);
-      }, 0);
+      }, 1000);
     });
   });
+  // 제출 버튼 이벤트 연결
+  const submitBtn = document.getElementById('blank-submit-btn');
+  if (blankGame.playing && submitBtn) {
+    submitBtn.onclick = function() {
+      endBlankGame();
+    };
+  }
   updateBlankGameInfo();
 }
 
@@ -1069,41 +1115,75 @@ function updateBlankGameInfo() {
 
 function formatBlankTime(sec) {
   const m = Math.floor(sec / 60);
-  const s = Math.floor(sec % 60);
-  return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  const s = (sec % 60).toFixed(1);
+  return `${m.toString().padStart(2, '0')}:${s.padStart(4, '0')}`;
 }
 
 function startBlankGameTimer() {
   if (blankGame.timer) clearInterval(blankGame.timer);
   blankGame.timer = setInterval(() => {
-    blankGame.timeLeft -= 0.01;
+    blankGame.timeLeft -= 0.1;
     if (blankGame.timeLeft <= 0) {
       blankGame.timeLeft = 0;
       endBlankGame();
     }
-    renderBlankGame(); // 타이머마다 하단 정보 갱신
-  }, 10);
+    updateBlankGameInfo(); // 타이머마다 하단 정보만 갱신 (입력 필드는 재생성하지 않음)
+  }, 100);
 }
 
 function updateBlankGameInput(idx, value) {
   if (!blankGame.playing) return;
   blankGame.blanks[idx].userInput = value;
+  
   // 정답 체크 및 점수 갱신 (명사 부분만 비교)
   let correct = 0;
   blankGame.blanks.forEach(b => {
     if (b.userInput.trim() === b.answer) correct++;
   });
   blankGame.score = correct;
-  updateBlankGameInfo();
-  if (blankGame.blanks.every(b => b.userInput.trim().length > 0)) {
-    endBlankGame();
+  
+  // 입력 필드 배경색 업데이트
+  const input = document.getElementById(`blank-input-${idx}`);
+  if (input) {
+    const blank = blankGame.blanks[idx];
+    if (blank.userInput.trim() !== '') {
+      if (blank.userInput.trim() === blank.answer) {
+        input.style.backgroundColor = '#e3f2fd'; // 연한 하늘색 (정답)
+      } else {
+        input.style.backgroundColor = '#fce4ec'; // 연한 분홍색 (오답)
+      }
+    } else {
+      input.style.backgroundColor = '#fff'; // 기본 배경색
+    }
   }
+  
+  updateBlankGameInfo();
 }
 
 function endBlankGame() {
+  if (!blankGame.playing) return; // 이미 제출된 경우 중복 제출 방지
   blankGame.playing = false;
   blankGame.endTime = Date.now();
   if (blankGame.timer) clearInterval(blankGame.timer);
+  // --- firebase 업로드용 record 생성 및 저장 ---
+  const total = blankGame.blanks.length;
+  const correct = blankGame.blanks.filter(b => b.userInput.trim() === b.answer).length;
+  const wrong = total - correct;
+  const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const time = ((blankGame.endTime - blankGame.startTime) / 1000);
+  const record = {
+    id: user.id || 'guest',
+    name: user.name || 'guest',
+    mode: currentLang === 'kor' ? 'blank-kor' : 'blank-eng',
+    level: blankGame.level,
+    accuracy: accuracy,
+    speed: 0, // 빈칸게임은 속도 대신 0
+    wrong: wrong,
+    tryCount: 1, // 필요시 증가 가능
+    timestamp: Date.now(),
+    time: time
+  };
+  saveRecord(record);
   showBlankGameResult();
 }
 
@@ -1113,23 +1193,33 @@ function showBlankGameResult() {
   const wrong = total - correct;
   const time = ((blankGame.endTime - blankGame.startTime) / 1000).toFixed(2);
   const html = `
-    <div id=\"blank-result-modal\" style=\"position:fixed;left:0;top:0;width:100vw;height:100vh;background:#0007;z-index:1000;display:flex;align-items:center;justify-content:center;\">
-      <div style=\"background:#fff;padding:36px 48px;border-radius:18px;min-width:320px;text-align:center;\">
-        <h2 style=\"color:#3f3fc9;margin-bottom:1em;\">결과</h2>
-        <div style=\"font-size:1.2em;margin-bottom:1em;\">정확도: <b>${Math.round((correct/total)*100)}%</b></div>
-        <div style=\"font-size:1.2em;margin-bottom:1em;\">점수: <b>${blankGame.score}</b></div>
-        <div style=\"font-size:1.2em;margin-bottom:1em;\">오타수: <b>${wrong}</b></div>
-        <div style=\"font-size:1.2em;margin-bottom:1em;\">소요 시간: <b>${time}초</b></div>
-        <button id=\"blank-result-close\" style=\"background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;\">닫기</button>
+    <div id="blank-result-modal" style="position:fixed;left:0;top:0;width:100vw;height:100vh;background:#0007;z-index:1000;display:flex;align-items:center;justify-content:center;">
+      <div style="background:#fff;padding:36px 48px;border-radius:18px;min-width:320px;text-align:center;">
+        <h2 style="color:#3f3fc9;margin-bottom:1em;">결과</h2>
+        <div style="font-size:1.2em;margin-bottom:1em;">정확도: <b>${Math.round((correct/total)*100)}%</b></div>
+        <div style="font-size:1.2em;margin-bottom:1em;">점수: <b>${blankGame.score}</b></div>
+        <div style="font-size:1.2em;margin-bottom:1em;">오타수: <b>${wrong}</b></div>
+        <div style="font-size:1.2em;margin-bottom:1em;">소요 시간: <b>${time}초</b></div>
+        <button id="blank-result-close" style="background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;">닫기</button>
       </div>
     </div>
   `;
   document.body.insertAdjacentHTML('beforeend', html);
-  document.getElementById('blank-result-close').onclick = function() {
+  const closeModal = () => {
     const modal = document.getElementById('blank-result-modal');
     if (modal) modal.remove();
-    // 게임 화면(빈칸 채우기 게임 탭) 유지, 로그인 상태로 돌아가지 않음
   };
+  document.getElementById('blank-result-close').onclick = closeModal;
+  // 엔터키로도 닫기 (중복 생성 방지, 업로드 없이 단순 닫기)
+  const keyHandler = (e) => {
+    if (e.key === 'Enter') {
+      closeModal();
+      window.removeEventListener('keydown', keyHandler);
+    }
+  };
+  setTimeout(() => {
+    window.addEventListener('keydown', keyHandler);
+  }, 0);
 }
 
 // 난이도별 빈칸 개수 반환 함수 복원
@@ -1163,10 +1253,8 @@ function showHintPopup(hint, inputEl) {
   popup.style.left = rect.left + window.scrollX + 'px';
   popup.style.top = (rect.bottom + window.scrollY + 8) + 'px';
   document.body.appendChild(popup);
-  // 2초간 focus 반복만 (blur는 막지 않음)
-  let focusInterval = setInterval(() => { inputEl.focus(); }, 50);
+  // 2초 후 팝업만 제거 (focus 반복 없음)
   setTimeout(() => {
-    clearInterval(focusInterval);
     popup.remove();
   }, 2000);
 }
