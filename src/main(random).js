@@ -181,34 +181,11 @@ function renderTypingLine() {
     document.getElementById('typing-lines-below').innerHTML = '';
     lineStartTime = null;
   }
-  // 입력창 복붙 방지 이벤트 재등록
-  setTimeout(() => {
-    const typingInput = document.getElementById('typing-input');
-    if (typingInput) {
-      ['paste', 'drop', 'copy', 'cut'].forEach(ev => {
-        typingInput.addEventListener(ev, e => e.preventDefault());
-      });
-    }
-  }, 0);
 }
 
 function handleTypingInput(e) {
   const input = e.target.value;
   const line = typingLines[currentLineIndex] || '';
-  // 1000타 이상 입력 시 안내 및 입력 차단
-  const keystrokes = countKeystrokes(input);
-  if (keystrokes > 1000) {
-    e.target.value = input.slice(0, input.length - (keystrokes - 1000));
-    document.getElementById('line-result').innerText = '1000타수 이상은 신뢰할 수 없어 기록하지 않음';
-    e.target.disabled = true;
-    return;
-  } else {
-    // 안내문구 초기화(정상 입력 시)
-    if (document.getElementById('line-result').innerText === '1000타수 이상은 신뢰할 수 없어 기록하지 않음') {
-      document.getElementById('line-result').innerText = '';
-      e.target.disabled = false;
-    }
-  }
   // 입력이 1글자 이상이고, lineStartTime이 null이면 지금 시각으로 초기화 (한글/영어 모두)
   if (input.length > 0 && !lineStartTime) {
     lineStartTime = Date.now();
@@ -577,21 +554,6 @@ function showTypingResult() {
   const time = formatTypingTime(); // 전체 소요 시간
   // 최고 타수 계산 (줄별 WPM 중 최대값)
   const maxLineWpm = lineWpmList.length > 0 ? Math.round(Math.max(...lineWpmList)) : 0;
-  // 전체 입력값의 타수 체크
-  let allInput = '';
-  for (let i = 0; i < currentLineIndex; i++) {
-    allInput += typingLines[i];
-  }
-  allInput += document.getElementById('typing-input').value;
-  const totalKeystrokes = countKeystrokes(allInput);
-  if (totalKeystrokes > 1000) {
-    document.getElementById('line-result').innerText = '1000타수 이상은 신뢰할 수 없어 기록하지 않음';
-    if (typeof showRankPopup === 'function') showRankPopup(null); // 등수 팝업도 띄우지 않음
-    if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
-    document.getElementById('typing-time').innerText = formatTypingTime();
-    lineWpmList = [];
-    return;
-  }
   const record = {
     id: user.id || 'guest',
     name: user.name || 'guest',
@@ -708,23 +670,8 @@ function restart() {
 
 function saveRecord(record, callback) {
   // 빈칸 채우기 게임은 speed 0이어도 저장, 나머지는 기존 조건 유지
-  const isBlankGame = record.mode && record.mode.startsWith('blank-');
-  // 1000타 이상이면 저장하지 않음
-  if (!isBlankGame) {
-    let totalKeystrokes = 0;
-    if (typeof countKeystrokes === 'function') {
-      if (Array.isArray(typingLines)) {
-        for (let i = 0; i < typingLines.length; i++) {
-          totalKeystrokes += countKeystrokes(typingLines[i]);
-        }
-      }
-      totalKeystrokes += countKeystrokes(document.getElementById('typing-input').value);
-    }
-    if (totalKeystrokes > 1000) return;
-  }
-  // normal/hard 난이도에서 accuracy가 0이어도 blanks가 모두 채워졌으면 업로드 허용
-  if (!isBlankGame && (record.accuracy === 0 || record.speed === 0)) return;
-  // blankGame은 accuracy 0이어도 무조건 업로드 (제출 시점에서 이미 빈칸 채우기 완료)
+  const isBlankGame = record.mode === 'blank-kor' || record.mode === 'blank-eng';
+  if ((!isBlankGame && (record.accuracy === 0 || record.speed === 0)) || (isBlankGame && record.accuracy === 0)) return;
   const userKey = record.id + '_' + record.name;
   const ref = db.ref('records/' + userKey + '/' + record.mode);
   ref.once('value', snapshot => {
@@ -925,80 +872,60 @@ function renderRankingModeBtns() {
   });
 }
 
-// ===== 빈칸 채우기 게임용 고정 문장/정답/힌트 =====
-const BLANK_SENTENCES = {
-  easy: [
-    "서울여자중학교는 세상의 [변화]에 맞춰",
-    "스스로 배우는 힘을 갖춘 [평생학습자]를 육성하며,",
-    "언제 어디서나 누구와도 [협력]하고 일할 수 있는 역량을 기르는 교육을 합니다.",
-    "[창의적 사고]와 문제 해결 능력을 배양하여",
-    "글로벌 사회에서 [주도적인] 학습자가 되기 위해 노력합니다.",
-    "또한, 학교 구성원 [모두가] 참여하는",
-    "따뜻하고 포용적인 학교 문화를 조성하여,",
-    "모든 학생이 [자신감]을 갖고 자신의 꿈을 실현할 수 있도록 장려합니다.",
-    "학생들의 미래를 밝히는 [힘찬] 배움터로서,",
-    "책임감 있고 사회에 공헌하는 글로벌 [리더]로 성장할 수 있도록",
-    "끝없이 지원하고 [격려]하겠습니다."
-  ],
-  normal: [
-    "서울여자중학교는 세상의 [변화]에 맞춰",
-    "[스스로] 배우는 힘을 갖춘 [평생학습자]를 육성하며,",
-    "언제 어디서나 누구와도 [협력]하고 일할 수 있는 역량을 기르는 교육을 합니다.",
-    "[창의적 사고]와 [문제 해결 능력]을 배양하여",
-    "[글로벌] 사회에서 [주도적인] 학습자가 되기 위해 노력합니다.",
-    "또한, 학교 구성원 모두가 참여하는 [따뜻]하고 [포용]적인 학교 문화를 조성하여,",
-    "모든 학생이 [자신감]을 갖고 자신의 [꿈]을 실현할 수 있도록 장려합니다.",
-    "학생들의 미래를 밝히는 힘찬 [배움터]로서,",
-    "[책임감] 있고 사회에 공헌하는 [글로벌] 리더로 성장할 수 있도록",
-    "끝없이 [지원]하고 [격려]하겠습니다."
-  ],
-  hard: [
-    "서울여자중학교는 세상의 [변화]에 맞춰",
-    "[스스로] 배우는  [힘]을 갖춘 [평생학습자]를 육성하며,",
-    "언제 어디서나 누구와도 [협력]하고 일할 수 있는 역량을 기르는 교육을 합니다.",
-    "[창의적 사고]와 [문제 해결 능력]을 배양하여",
-    "[글로벌] 사회에서 [주도적인] 학습자가 되기 위해 노력합니다.",
-    "또한, 학교 구성원  [모두가]참여하는 [따뜻]하고 [포용]적인 학교 문화를 조성하여,",
-    "모든 학생이 [자신감]을 갖고 자신의 [꿈]을 실현할 수 있도록 장려합니다.",
-    "학생들의  [미래]를 밝히는 힘찬 [배움터]로서,",
-    "[책임감] 있고 사회에  [공헌]하는 [글로벌] 리더로 성장할 수 있도록",
-    "끝없이 [지원]하고 [격려]하겠습니다."
-  ]
+// ===== 빈칸 채우기 게임용 중요 단어 선정 및 난이도별 빈칸 배분 함수 =====
+
+// --- 명사만 추출하는 함수 ---
+function extractNouns(sentence) {
+  const exclude = [
+    '은','는','이','가','을','를','에','의','와','과','도','로','에서','에게','한','및','또한','그리고','하지만','또','더','수','있도록','위해','하여','하고','하며','으로','까지','부터','처럼','만큼','밖에','마다','보다','때문에','중','등','같이','같은','같다','된다','합니다','합니다.','노력합니다','조성하여','장려합니다','밝히는','배움터로서','공헌하는','성장할','있도록','끝없이','지원하고','격려하겠습니다'
+  ];
+  return sentence.split(/\s+/).filter(word =>
+    word.length > 1 &&
+    /^[가-힣]+$/.test(word) &&
+    !exclude.includes(word)
+  );
+}
+
+// --- 힌트 데이터: 실제 등장 명사만 ---
+const BLANK_HINTS = {
+  '변화': '세상의 흐름이나 상태가 바뀌는 것',
+  '평생학습자': '평생 동안 배우는 사람',
+  '협력': '서로 힘을 합쳐 함께 일함',
+  '역량': '어떤 일을 해낼 수 있는 힘이나 능력',
+  '교육': '지식이나 기술, 태도 등을 가르치고 배우는 활동',
+  '사고': '생각하는 것',
+  '문제': '해결해야 할 일이나 상황',
+  '능력': '어떤 일을 해낼 수 있는 힘',
+  '사회': '사람들이 모여 이루는 집단',
+  '학습자': '배우는 사람',
+  '학교': '학생과 교사가 함께 공부하는 곳',
+  '구성원': '어떤 집단을 이루는 사람',
+  '참여': '어떤 일에 끼어들어 함께함',
+  '문화': '사람들의 생활양식, 가치관, 행동양식',
+  '학생': '학교에서 공부하는 사람',
+  '자신감': '자기 자신을 믿는 마음',
+  '꿈': '이루고 싶은 목표나 바람',
+  '미래': '앞으로 다가올 시간',
+  '배움터': '배우는 장소',
+  '책임감': '자신의 역할이나 의무를 다하려는 마음',
+  '리더': '다른 사람을 이끄는 사람',
+  '지원': '도와주는 것',
+  '격려': '힘을 내라고 북돋아 주는 것',
+  '장려': '좋은 일을 하도록 힘을 북돋아 줌'
 };
 
-const BLANK_ANSWERS = {
-  easy: [
-    "변화", "평생학습자", "협력", "창의적 사고", "주도적인", "모두가", "자신감", "힘찬", "리더", "격려"
-  ],
-  normal: [
-    "변화", "스스로", "평생학습자", "협력", "창의적 사고", "문제 해결 능력", "글로벌", "주도적인", "따뜻", "포용", "자신감", "꿈", "배움터", "책임감", "글로벌", "지원", "격려"
-  ],
-  hard: [
-    "변화", "스스로", "힘", "평생학습자", "협력", "창의적 사고", "문제 해결 능력", "글로벌", "주도적인", "모두가", "따뜻", "포용", "자신감", "꿈", "미래", "배움터", "책임감", "공헌", "글로벌", "지원", "격려"
-  ]
-};
-
-const BLANK_HINTS_FIXED = {
-  "변화": "세상의 흐름이나 상태가 바뀌는 것",
-  "평생학습자": "평생 동안 배우는 사람",
-  "협력": "서로 힘을 합쳐 함께 일함",
-  "사고": "생각하는 것",
-  "주도적인": "스스로 이끌어 나가는 태도",
-  "모두가": "전체 사람들",
-  "자신감": "자기 자신을 믿는 마음",
-  "배움터": "배우는 장소",
-  "리더": "다른 사람을 이끄는 사람",
-  "격려": "힘을 내라고 북돋아 주는 것",
-  "스스로": "남의 힘을 빌리지 않고 자기 혼자서",
-  "문제": "해결해야 할 일이나 상황",
-  "글로벌": "전 세계적인, 세계적인",
-  "따뜻": "온화하고 포근한 느낌",
-  "포용": "너그럽게 감싸 안음",
-  "꿈": "이루고 싶은 목표나 바람",
-  "책임감": "자신의 역할이나 의무를 다하려는 마음",
-  "힘": "어떤 일을 해낼 수 있는 능력",
-  "지원": "도와주는 것",
-  "공헌": "어떤 일이나 목적을 위해 힘을 보탬"
+const BLANK_HINTS_ENG = {
+  "learners": "People who are learning",
+  "ability": "The power or skill to do something",
+  "education": "The process of teaching or learning",
+  "collaborate": "To work together with others",
+  "confidence": "Belief in yourself and your abilities",
+  "dreams": "Things you want to achieve in the future",
+  "leaders": "People who guide or direct others",
+  "society": "A community of people living together",
+  "future": "The time yet to come",
+  "support": "To help or assist",
+  "encourage": "To give hope or confidence to someone"
 };
 
 // ===== 빈칸 채우기 게임 상태 및 로직 뼈대 =====
@@ -1034,28 +961,69 @@ document.getElementById('blank-difficulty').onchange = function() {
   }
 };
 
-// ===== 고정된 빈칸 게임 로직으로 변경 =====
+// Fisher-Yates 셔플 함수 (startBlankGame보다 위에 위치)
+function shuffleArray(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+  return array;
+}
+
+// 명사+조사 분리 함수
+function splitNounJosa(word) {
+  for (const noun of Object.keys(BLANK_HINTS)) {
+    if (word.startsWith(noun)) {
+      return { noun, josa: word.slice(noun.length) };
+    }
+  }
+  return null;
+}
+
 function startBlankGame(level = 'easy') {
   blankGame.level = level;
-  // 언어별 문장/정답/힌트 선택
-  let sentences, answers, hints;
+  // 언어별 문장/힌트 선택
+  let sentence, HINTS;
   if (currentLang === 'kor') {
-    sentences = BLANK_SENTENCES[level];
-    answers = BLANK_ANSWERS[level];
-    hints = BLANK_HINTS_FIXED;
+    sentence = typingLinesKor.join(' ');
+    HINTS = BLANK_HINTS;
   } else {
-    sentences = BLANK_SENTENCES_ENG[level];
-    answers = BLANK_ANSWERS_ENG[level];
-    hints = BLANK_HINTS_ENG;
+    sentence = typingLinesEng.join(' ');
+    HINTS = BLANK_HINTS_ENG;
   }
-  blankGame.sentence = sentences ? sentences.join('\n') : '';
-  blankGame.blanks = answers ? answers.map((answer, idx) => ({
+  blankGame.sentence = sentence;
+  let blankCount = getBlankCountByLevel(Object.keys(HINTS), level);
+  const allWords = sentence.split(/\s+/);
+  // BLANK_HINTS 명사+조사 분리하여 후보 추출 (영어는 조사 없음)
+  const blankIndexes = [];
+  const blankMeta = {};
+  allWords.forEach((word, idx) => {
+    if (currentLang === 'kor') {
+      const split = splitNounJosa(word);
+      if (split && HINTS[split.noun]) {
+        blankIndexes.push(idx);
+        blankMeta[idx] = split; // {noun, josa}
+      }
+    } else {
+      // 영어: 단어 소문자 기준
+      const w = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+      if (HINTS[w]) {
+        blankIndexes.push(idx);
+        blankMeta[idx] = { noun: w, josa: '' };
+      }
+    }
+  });
+  if (blankCount > blankIndexes.length) blankCount = blankIndexes.length;
+  // 랜덤하게 섞어서 앞에서부터 선택 (셔플 복원)
+  const shuffled = shuffleArray([...blankIndexes]);
+  const selectedIndexes = shuffled.slice(0, blankCount);
+  blankGame.blanks = selectedIndexes.map(idx => ({
     idx,
-    answer,
+    answer: blankMeta[idx].noun,
     userInput: '',
-    hint: hints[answer] || '',
-    josa: ''
-  })) : [];
+    hint: HINTS[blankMeta[idx].noun],
+    josa: blankMeta[idx].josa
+  }));
   blankGame.playing = true;
   blankGame.timeLeft = 120;
   blankGame.score = 0;
@@ -1074,42 +1042,40 @@ function renderBlankGame() {
     document.querySelector('.container').appendChild(area);
   }
   let html = '';
-  // 언어별 문장 분기
-  let sentences;
-  if (currentLang === 'kor') {
-    sentences = BLANK_SENTENCES[blankGame.level];
-  } else {
-    sentences = BLANK_SENTENCES_ENG[blankGame.level];
-  }
-  let blankIdx = 0;
-  for (let line of sentences) {
-    // [정답]을 input으로 변환
-    line = line.replace(/\[([^\]]+)\]/g, (match, answer) => {
-      const userInput = blankGame.blanks[blankIdx]?.userInput || '';
-      let bgColor = '#fff';
-      if (userInput.trim() !== '') {
-        if (userInput.trim() === answer) {
-          bgColor = '#e3f2fd'; // 정답
+  const allWords = blankGame.sentence.split(/\s+/);
+  // 한 문단(한 줄)로 보이도록 수정
+  let lineHtml = '';
+  for (let j = 0; j < allWords.length; j++) {
+    const blankIdx = blankGame.blanks.findIndex(b => b.idx === j);
+    if (blankIdx !== -1) {
+      const josa = blankGame.blanks[blankIdx].josa || '';
+      const blank = blankGame.blanks[blankIdx];
+      let bgColor = '#fff'; // 기본 배경색
+      if (blank.userInput.trim() !== '') {
+        if (blank.userInput.trim() === blank.answer) {
+          bgColor = '#e3f2fd'; // 연한 하늘색 (정답)
         } else {
-          bgColor = '#fce4ec'; // 오답
+          bgColor = '#fce4ec'; // 연한 분홍색 (오답)
         }
       }
-      const inputHtml = `<input type="text" class="blank-input" data-idx="${blankIdx}" id="blank-input-${blankIdx}" name="blank-input-${blankIdx}" value="${userInput}" style="width:70px; margin:0 4px; text-align:center; background-color:${bgColor};" autocomplete="off" />`;
-      blankIdx++;
-      return inputHtml;
-    });
-    html += `<div style="margin-bottom:4px;">${line}</div>`;
+      lineHtml += `<span class='blank-input-wrap' style='position:relative;display:inline-block;'>`;
+      lineHtml += `<input type=\"text\" class=\"blank-input\" data-idx=\"${blankIdx}\" id=\"blank-input-${blankIdx}\" name=\"blank-input-${blankIdx}\" value=\"${blank.userInput || ''}\" style=\"width:70px; margin:0 4px; text-align:center; background-color:${bgColor};\" autocomplete=\"off\" />`;
+      if (josa) lineHtml += `<span style='font-weight:normal;'>${josa} </span>`;
+      lineHtml += `</span>`;
+    } else {
+      lineHtml += allWords[j] + ' ';
+    }
   }
+  html += `<div style='margin-bottom:10px;'>${lineHtml.trim()}</div>`;
   // 제출 버튼 추가 (게임 중일 때만)
   if (blankGame.playing) {
-    html += `<div style='margin-top:24px;text-align:center;'><button id="blank-submit-btn" style="background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;">제출</button></div>`;
+    html += `<div style='margin-top:24px;text-align:center;'><button id=\"blank-submit-btn\" style=\"background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;\">제출</button></div>`;
   } else {
-    html += `<div style='margin-top:24px;text-align:center;'><button id="blank-submit-btn" style="background:#b0bec5;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;" disabled>제출</button></div>`;
+    html += `<div style='margin-top:24px;text-align:center;'><button id=\"blank-submit-btn\" style=\"background:#b0bec5;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;" disabled>제출</button></div>`;
   }
   area.innerHTML = html;
-  // input 이벤트 연결 (기존과 동일)
   const blankInputs = area.querySelectorAll('.blank-input');
-  blankInputs.forEach((input, idx) => {
+  area.querySelectorAll('.blank-input').forEach((input, idx) => {
     input.addEventListener('input', e => {
       const idx = Number(e.target.getAttribute('data-idx'));
       updateBlankGameInput(idx, e.target.value);
@@ -1119,21 +1085,26 @@ function renderBlankGame() {
       if (e.key === 'Enter' || e.key === 'Tab') {
         e.preventDefault();
         const currentIdx = Number(e.target.getAttribute('data-idx'));
+        // blankInputs는 위에서 아래, 왼쪽에서 오른쪽 순서로 정렬되어 있음
         const thisInput = input;
         const inputsArr = Array.from(blankInputs);
         const thisIdx = inputsArr.indexOf(thisInput);
         if (thisIdx < blankInputs.length - 1) {
+          // 다음 빈칸으로 이동
           blankInputs[thisIdx + 1].focus();
         } else {
+          // 마지막 빈칸이면 제출 버튼으로 포커스 이동
           const submitBtn = document.getElementById('blank-submit-btn');
           if (submitBtn) submitBtn.focus();
         }
       }
     });
-    // 클릭 시 힌트 표시
+    // 클릭 시 힌트 표시 (기존 팝업 제거 후 새로 표시)
     input.addEventListener('focus', e => {
+      // 기존 힌트 팝업 제거
       const oldPopup = document.getElementById('blank-hint-popup');
       if (oldPopup) oldPopup.remove();
+      
       const idx = Number(e.target.getAttribute('data-idx'));
       setTimeout(() => {
         showHintPopup(blankGame.blanks[idx]?.hint, e.target);
@@ -1148,14 +1119,6 @@ function renderBlankGame() {
     };
   }
   updateBlankGameInfo();
-  // 복사/붙여넣기/잘라내기/드롭 금지 이벤트 등록
-  setTimeout(() => {
-    document.querySelectorAll('.blank-input').forEach(input => {
-      ['paste', 'drop', 'copy', 'cut'].forEach(ev => {
-        input.addEventListener(ev, e => e.preventDefault());
-      });
-    });
-  }, 0);
 }
 
 function updateBlankGameInfo() {
@@ -1185,114 +1148,62 @@ function startBlankGameTimer() {
 function updateBlankGameInput(idx, value) {
   if (!blankGame.playing) return;
   blankGame.blanks[idx].userInput = value;
-  // 언어별 문장 분기
-  let sentences;
-  if (currentLang === 'kor') {
-    sentences = BLANK_SENTENCES[blankGame.level];
-  } else {
-    sentences = BLANK_SENTENCES_ENG[blankGame.level];
-  }
-  let realAnswers = [];
-  for (let line of sentences) {
-    line.replace(/\[([^\]]+)\]/g, (match, answer) => {
-      realAnswers.push(match.replace(/\[|\]/g, ''));
-      return match;
-    });
-  }
-  // idx번째 빈칸의 실제 정답
-  const realAnswer = realAnswers[idx];
-  // 정답 체크 및 점수 갱신 (실제 문구 전체로 비교)
+  
+  // 정답 체크 및 점수 갱신 (명사 부분만 비교)
   let correct = 0;
-  blankGame.blanks.forEach((b, i) => {
-    const ans = realAnswers[i];
-    if (b.userInput.trim() === ans) correct++;
+  blankGame.blanks.forEach(b => {
+    if (b.userInput.trim() === b.answer) correct++;
   });
   blankGame.score = correct;
+  
   // 입력 필드 배경색 업데이트
   const input = document.getElementById(`blank-input-${idx}`);
   if (input) {
-    if (value.trim() !== '') {
-      if (value.trim() === realAnswer) {
-        input.style.backgroundColor = '#e3f2fd'; // 정답
+    const blank = blankGame.blanks[idx];
+    if (blank.userInput.trim() !== '') {
+      if (blank.userInput.trim() === blank.answer) {
+        input.style.backgroundColor = '#e3f2fd'; // 연한 하늘색 (정답)
       } else {
-        input.style.backgroundColor = '#fce4ec'; // 오답
+        input.style.backgroundColor = '#fce4ec'; // 연한 분홍색 (오답)
       }
     } else {
-      input.style.backgroundColor = '#fff';
+      input.style.backgroundColor = '#fff'; // 기본 배경색
     }
   }
+  
   updateBlankGameInfo();
 }
 
 function endBlankGame() {
-  if (!blankGame.playing) return;
+  if (!blankGame.playing) return; // 이미 제출된 경우 중복 제출 방지
   blankGame.playing = false;
   blankGame.endTime = Date.now();
   if (blankGame.timer) clearInterval(blankGame.timer);
-  // 언어별 문장 분기
-  let sentences;
-  if (currentLang === 'kor') {
-    sentences = BLANK_SENTENCES[blankGame.level];
-  } else {
-    sentences = BLANK_SENTENCES_ENG[blankGame.level];
-  }
-  let realAnswers = [];
-  for (let line of sentences) {
-    line.replace(/\[([^\]]+)\]/g, (match, answer) => {
-      realAnswers.push(match.replace(/\[|\]/g, ''));
-      return match;
-    });
-  }
-  // 정답 개수 기준으로 채점 및 기록 저장
-  const total = realAnswers.length;
-  let correct = 0;
-  blankGame.blanks.forEach((b, i) => {
-    const ans = realAnswers[i];
-    if (b && b.userInput && b.userInput.trim() === ans) correct++;
-  });
+  // --- firebase 업로드용 record 생성 및 저장 ---
+  const total = blankGame.blanks.length;
+  const correct = blankGame.blanks.filter(b => b.userInput.trim() === b.answer).length;
   const wrong = total - correct;
   const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
   const time = ((blankGame.endTime - blankGame.startTime) / 1000);
-  // 언어와 난이도에 따라 mode, level 저장 (수정: mode에 난이도 포함)
-  const mode = `${currentLang === 'kor' ? 'blank-kor' : 'blank-eng'}-${blankGame.level}`;
   const record = {
     id: user.id || 'guest',
     name: user.name || 'guest',
-    mode: mode,
+    mode: currentLang === 'kor' ? 'blank-kor' : 'blank-eng',
     level: blankGame.level,
     accuracy: accuracy,
-    speed: 0,
+    speed: 0, // 빈칸게임은 속도 대신 0
     wrong: wrong,
-    tryCount: 1,
+    tryCount: 1, // 필요시 증가 가능
     timestamp: Date.now(),
-    time: time,
-    score: correct // 점수도 명시적으로 저장
+    time: time
   };
   saveRecord(record);
   showBlankGameResult();
 }
 
 function showBlankGameResult() {
-  // 언어별 문장 분기
-  let sentences;
-  if (currentLang === 'kor') {
-    sentences = BLANK_SENTENCES[blankGame.level];
-  } else {
-    sentences = BLANK_SENTENCES_ENG[blankGame.level];
-  }
-  let realAnswers = [];
-  for (let line of sentences) {
-    line.replace(/\[([^\]]+)\]/g, (match, answer) => {
-      realAnswers.push(match.replace(/\[|\]/g, ''));
-      return match;
-    });
-  }
   const total = blankGame.blanks.length;
-  let correct = 0;
-  blankGame.blanks.forEach((b, i) => {
-    const ans = realAnswers[i];
-    if (b.userInput.trim() === ans) correct++;
-  });
+  const correct = blankGame.blanks.filter(b => b.userInput.trim() === b.answer).length;
   const wrong = total - correct;
   const time = ((blankGame.endTime - blankGame.startTime) / 1000).toFixed(2);
   const html = `
@@ -1300,7 +1211,7 @@ function showBlankGameResult() {
       <div style="background:#fff;padding:36px 48px;border-radius:18px;min-width:320px;text-align:center;">
         <h2 style="color:#3f3fc9;margin-bottom:1em;">결과</h2>
         <div style="font-size:1.2em;margin-bottom:1em;">정확도: <b>${Math.round((correct/total)*100)}%</b></div>
-        <div style="font-size:1.2em;margin-bottom:1em;">점수: <b>${correct}</b></div>
+        <div style="font-size:1.2em;margin-bottom:1em;">점수: <b>${blankGame.score}</b></div>
         <div style="font-size:1.2em;margin-bottom:1em;">오타수: <b>${wrong}</b></div>
         <div style="font-size:1.2em;margin-bottom:1em;">소요 시간: <b>${time}초</b></div>
         <button id="blank-result-close" style="background:#3f3fc9;color:#fff;padding:10px 28px;border:none;border-radius:8px;font-size:1.1em;">닫기</button>
@@ -1313,6 +1224,7 @@ function showBlankGameResult() {
     if (modal) modal.remove();
   };
   document.getElementById('blank-result-close').onclick = closeModal;
+  // 엔터키로도 닫기 (중복 생성 방지, 업로드 없이 단순 닫기)
   const keyHandler = (e) => {
     if (e.key === 'Enter') {
       closeModal();
@@ -1447,7 +1359,7 @@ function renderBlankRankingUI() {
   </div>`;
   html += `<div id="blank-ranking-table-area"></div>`;
   area.innerHTML = html;
-  // 버튼 이벤트 연결 (UI 렌더링 후 항상 재연결)
+  // 버튼 이벤트 연결
   area.querySelectorAll('.blank-lang-btn').forEach(btn => {
     btn.onclick = () => { blankRankingLang = btn.getAttribute('data-lang'); renderBlankRankingUI(); };
   });
@@ -1467,16 +1379,14 @@ function renderBlankRankingTable() {
     snapshot.forEach(userSnap => {
       userSnap.forEach(modeSnap => {
         const rec = modeSnap.val();
-        // mode가 blank-kor-easy, blank-eng-hard 등으로 저장된 것만 필터
-        if (rec && rec.mode && rec.mode.startsWith('blank-')) {
+        if (rec && (rec.mode === 'blank-kor' || rec.mode === 'blank-eng')) {
           records.push(rec);
         }
       });
     });
-    // 필터 적용 (수정: mode 조합으로 필터)
+    // 필터 적용
     const langKey = blankRankingLang === 'kor' ? 'blank-kor' : 'blank-eng';
-    const modeKey = `${langKey}-${blankRankingLevel}`;
-    const filtered = records.filter(r => r.mode === modeKey);
+    const filtered = records.filter(r => r.mode === langKey && r.level === blankRankingLevel);
     // 정렬: 정확도 → 점수 → 소요시간(짧은 순)
     filtered.sort((a, b) => b.accuracy - a.accuracy || b.score - a.score || a.time - b.time);
     // 테이블 렌더링
@@ -1499,7 +1409,7 @@ function renderBlankRankingTable() {
           <td>${r.wrong}</td>
           <td>${r.time ? r.time.toFixed(2)+'초' : '-'}</td>
           <td>${dateStr}</td>
-          <td>${r.mode.startsWith('blank-kor')?'한글':'영어'}</td>
+          <td>${r.mode==='blank-kor'?'한글':'영어'}</td>
           <td>${r.level==='easy'?'쉬움':r.level==='normal'?'보통':'어려움'}</td>
         </tr>`;
       });
@@ -1514,77 +1424,4 @@ window.onload = function() {
   loadAllRankings(() => showRankingSlide(0));
   startRankingSlider(0); // 슬라이드 자동 시작
   renderRankingTabs(); // 랭킹 탭 UI 렌더링
-};
-
-// ===== 영어 빈칸 채우기 게임용 문장/정답/힌트 추가 =====
-const BLANK_SENTENCES_ENG = {
-  easy: [
-    "Seoul Girls Middle School adapts to the [changes] of the world,",
-    "nurtures [lifelong learners] with the ability to learn independently,",
-    "and provides education that fosters the capacity to [collaborate] and work with anyone, anywhere.",
-    "By cultivating [creative thinking] and [problem-solving skills],",
-    "we strive to develop [proactive] learners in the global society.",
-    "Additionally, we create a [warm] and [inclusive] school culture where all members participate,",
-    "encouraging every student to gain [confidence] and pursue their [dreams].",
-    "As a [vibrant learning environment] that brightens the [future] of our students,",
-    "we will continuously support and [encourage] them to grow into responsible global [leaders] who contribute to society."
-  ],
-  normal: [
-    "Seoul Girls Middle School adapts to the [changes] of the world,",
-    "[independently] learning [lifelong learners] are nurtured,",
-    "and provides education that fosters the capacity to [collaborate] and work with anyone, anywhere.",
-    "By cultivating [creative thinking] and [problem-solving skills],",
-    "in the [global] society, we strive to develop [proactive] learners.",
-    "Additionally, all [members] participate in creating a [warm] and [inclusive] school culture,",
-    "encouraging every student to gain [confidence] and realize their [dreams].",
-    "As a [vibrant learning environment] that brightens the [future] of our students,",
-    "with [responsibility] and contributing to society as a [global] leader,",
-    "we will continuously [support] and [encourage] them."
-  ],
-  hard: [
-    "Seoul Girls Middle School adapts to the [changes] of the world,",
-    "[independently] learning [ability] is fostered in [lifelong learners],",
-    "and provides education that fosters the capacity to [collaborate] and work with anyone, anywhere.",
-    "By cultivating [creative thinking] and [problem-solving skills],",
-    "in the [global] society, we strive to develop [proactive] learners.",
-    "Additionally, all [members] participate in creating a [warm] and [inclusive] school culture,",
-    "encouraging every student to gain [confidence] and realize their [dreams].",
-    "As a [vibrant learning environment] that brightens the [future] of our students,",
-    "with [responsibility] and [contributing] as a [global] leader,",
-    "we will continuously [support] and [encourage] them."
-  ]
-};
-const BLANK_ANSWERS_ENG = {
-  easy: [
-    "changes", "lifelong learners", "collaborate", "creative thinking", "problem-solving skills", "proactive", "warm", "inclusive", "confidence", "dreams", "vibrant learning environment", "future", "encourage", "leaders"
-  ],
-  normal: [
-    "changes", "independently", "lifelong learners", "collaborate", "creative thinking", "problem-solving skills", "global", "proactive", "members", "warm", "inclusive", "confidence", "dreams", "vibrant learning environment", "future", "responsibility", "global", "support", "encourage"
-  ],
-  hard: [
-    "changes", "independently", "ability", "lifelong learners", "collaborate", "creative thinking", "problem-solving skills", "global", "proactive", "members", "warm", "inclusive", "confidence", "dreams", "vibrant learning environment", "future", "responsibility", "contributing", "global", "support", "encourage"
-  ]
-};
-const BLANK_HINTS_ENG = {
-  "changes": "The act or process of becoming different",
-  "lifelong learners": "People who keep learning throughout their lives",
-  "collaborate": "To work together with others",
-  "creative thinking": "The ability to think in new and original ways",
-  "problem-solving skills": "The ability to find solutions to difficult situations",
-  "proactive": "Taking action by causing change and not only reacting to change",
-  "warm": "Friendly and welcoming",
-  "inclusive": "Including all kinds of people and treating them all fairly and equally",
-  "confidence": "Belief in yourself and your abilities",
-  "dreams": "Things you want to achieve in the future",
-  "vibrant learning environment": "A lively and energetic place to learn",
-  "future": "The time yet to come",
-  "encourage": "To give hope or confidence to someone",
-  "leaders": "People who guide or direct others",
-  "independently": "Without help from others; on your own",
-  "ability": "The skill or power to do something",
-  "global": "Relating to the whole world",
-  "members": "People who belong to a group or organization",
-  "responsibility": "A duty or job that you are required or expected to do",
-  "support": "To help or assist",
-  "contributing": "Giving or adding something to help achieve a result"
 };

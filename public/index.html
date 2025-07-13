@@ -188,6 +188,16 @@
       }
       // ... 기존 코드 ...
     }
+
+    // 복사/붙여넣기/잘라내기/드롭 금지
+    window.addEventListener('DOMContentLoaded', function() {
+      const typingInput = document.getElementById('typing-input');
+      if (typingInput) {
+        ['paste', 'drop', 'copy', 'cut'].forEach(ev => {
+          typingInput.addEventListener(ev, e => e.preventDefault());
+        });
+      }
+    });
   </script>
 </body>
 </html>
