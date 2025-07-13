@@ -181,11 +181,34 @@ function renderTypingLine() {
     document.getElementById('typing-lines-below').innerHTML = '';
     lineStartTime = null;
   }
+  // 입력창 복붙 방지 이벤트 재등록
+  setTimeout(() => {
+    const typingInput = document.getElementById('typing-input');
+    if (typingInput) {
+      ['paste', 'drop', 'copy', 'cut'].forEach(ev => {
+        typingInput.addEventListener(ev, e => e.preventDefault());
+      });
+    }
+  }, 0);
 }
 
 function handleTypingInput(e) {
   const input = e.target.value;
   const line = typingLines[currentLineIndex] || '';
+  // 1000타 이상 입력 시 안내 및 입력 차단
+  const keystrokes = countKeystrokes(input);
+  if (keystrokes > 1000) {
+    e.target.value = input.slice(0, input.length - (keystrokes - 1000));
+    document.getElementById('line-result').innerText = '1000타수 이상은 신뢰할 수 없어 기록하지 않음';
+    e.target.disabled = true;
+    return;
+  } else {
+    // 안내문구 초기화(정상 입력 시)
+    if (document.getElementById('line-result').innerText === '1000타수 이상은 신뢰할 수 없어 기록하지 않음') {
+      document.getElementById('line-result').innerText = '';
+      e.target.disabled = false;
+    }
+  }
   // 입력이 1글자 이상이고, lineStartTime이 null이면 지금 시각으로 초기화 (한글/영어 모두)
   if (input.length > 0 && !lineStartTime) {
     lineStartTime = Date.now();
@@ -554,6 +577,21 @@ function showTypingResult() {
   const time = formatTypingTime(); // 전체 소요 시간
   // 최고 타수 계산 (줄별 WPM 중 최대값)
   const maxLineWpm = lineWpmList.length > 0 ? Math.round(Math.max(...lineWpmList)) : 0;
+  // 전체 입력값의 타수 체크
+  let allInput = '';
+  for (let i = 0; i < currentLineIndex; i++) {
+    allInput += typingLines[i];
+  }
+  allInput += document.getElementById('typing-input').value;
+  const totalKeystrokes = countKeystrokes(allInput);
+  if (totalKeystrokes > 1000) {
+    document.getElementById('line-result').innerText = '1000타수 이상은 신뢰할 수 없어 기록하지 않음';
+    if (typeof showRankPopup === 'function') showRankPopup(null); // 등수 팝업도 띄우지 않음
+    if (typingRealtimeTimer) clearInterval(typingRealtimeTimer);
+    document.getElementById('typing-time').innerText = formatTypingTime();
+    lineWpmList = [];
+    return;
+  }
   const record = {
     id: user.id || 'guest',
     name: user.name || 'guest',
@@ -671,6 +709,19 @@ function restart() {
 function saveRecord(record, callback) {
   // 빈칸 채우기 게임은 speed 0이어도 저장, 나머지는 기존 조건 유지
   const isBlankGame = record.mode && record.mode.startsWith('blank-');
+  // 1000타 이상이면 저장하지 않음
+  if (!isBlankGame) {
+    let totalKeystrokes = 0;
+    if (typeof countKeystrokes === 'function') {
+      if (Array.isArray(typingLines)) {
+        for (let i = 0; i < typingLines.length; i++) {
+          totalKeystrokes += countKeystrokes(typingLines[i]);
+        }
+      }
+      totalKeystrokes += countKeystrokes(document.getElementById('typing-input').value);
+    }
+    if (totalKeystrokes > 1000) return;
+  }
   // normal/hard 난이도에서 accuracy가 0이어도 blanks가 모두 채워졌으면 업로드 허용
   if (!isBlankGame && (record.accuracy === 0 || record.speed === 0)) return;
   // blankGame은 accuracy 0이어도 무조건 업로드 (제출 시점에서 이미 빈칸 채우기 완료)
@@ -1097,6 +1148,14 @@ function renderBlankGame() {
     };
   }
   updateBlankGameInfo();
+  // 복사/붙여넣기/잘라내기/드롭 금지 이벤트 등록
+  setTimeout(() => {
+    document.querySelectorAll('.blank-input').forEach(input => {
+      ['paste', 'drop', 'copy', 'cut'].forEach(ev => {
+        input.addEventListener(ev, e => e.preventDefault());
+      });
+    });
+  }, 0);
 }
 
 function updateBlankGameInfo() {
